@@ -1,0 +1,31 @@
+# Default project configuration for AI-TOD-v2 small object detection
+
+dataset:
+  name: "ai-tod-v2"
+  root: "data/ai-tod-v2"
+  imgsz: 800
+  micro_bins:
+    vt: [2, 8]
+    t: [8, 16]
+    s: [16, 32]
+    m: [32, 64]
+
+models:
+  baseline_v8: "yolov8s.pt"
+  baseline_26: "yolo26s.pt"
+
+training:
+  epochs: 50
+  batch_size: 16
+  workers: 4
+  optimizer: "AdamW"
+  lr0: 0.001
+
+inference:
+  conf: 0.25
+  iou: 0.45
+  sahi:
+    slice_height: 512
+    slice_width: 512
+    overlap_height_ratio: 0.2
+    overlap_width_ratio: 0.2

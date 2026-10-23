@@ -1,0 +1,42 @@
+# Python & Environments
+.venv/
+env/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.ipynb_checkpoints/
+
+# Datasets, Weights & Large Artifacts
+data/
+datasets/
+*.pt
+*.pth
+*.onnx
+*.engine
+*.bin
+*.tar.gz
+*.zip
+
+# Experiment Tracking & Logs
+runs/
+wandb/
+mlruns/
+lightning_logs/
+*.log
+
+# Internal Dev
+AGENTS.md
+CLAUDE.md
+GLOSSARY.md
+GLOSSARY-MAP.md
+docs/agents/
+docs/adr/
+.scratch/
+temp/
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
