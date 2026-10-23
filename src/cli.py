@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
 
 import typer
 
@@ -41,13 +40,13 @@ def bench_runtime(
         "-c",
         help="Path to YAML configuration file",
     ),
-    models: Optional[list[str]] = typer.Option(
+    models: list[str] | None = typer.Option(
         None,
         "--model",
         "-m",
         help="Model architectures to benchmark (e.g. yolov8s, yolo26s)",
     ),
-    batch_sizes: Optional[list[int]] = typer.Option(
+    batch_sizes: list[int] | None = typer.Option(
         None,
         "--batch-size",
         "-b",
