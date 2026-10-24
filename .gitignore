@@ -8,8 +8,8 @@ __pycache__/
 *.ipynb_checkpoints/
 
 # Datasets, Weights & Large Artifacts
-data/
-datasets/
+/data/
+/datasets/
 *.pt
 *.pth
 *.onnx
