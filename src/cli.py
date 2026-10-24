@@ -23,6 +23,9 @@ app.add_typer(train_app, name="train")
 bench_app = typer.Typer(help="Runtime latency, throughput, and VRAM benchmarking.")
 app.add_typer(bench_app, name="bench")
 
+kaggle_app = typer.Typer(help="Headless Kaggle GPU training orchestration.")
+bench_app.add_typer(kaggle_app, name="kaggle")
+
 eval_app = typer.Typer(help="Dual-surface evaluation on AI-TOD micro-scale tiers.")
 app.add_typer(eval_app, name="eval")
 
@@ -86,6 +89,166 @@ def bench_runtime(
     )
 
 
+@kaggle_app.command("scaffold")
+def kaggle_scaffold(
+    kernel_dir: Path = typer.Option(
+        Path("kaggle/kernels/aitod_train"),
+        "--kernel-dir",
+        "-k",
+        help="Directory to store Kaggle kernel configuration and runner script",
+    ),
+    kernel_id: str = typer.Option(
+        "miles2542/aitod-baseline-training",
+        "--kernel-id",
+        help="Kaggle kernel identifier (username/slug)",
+    ),
+    enable_gpu: bool = typer.Option(
+        True,
+        "--gpu/--no-gpu",
+        help="Target Dual NVIDIA T4 GPU accelerator",
+    ),
+    epochs: int = typer.Option(
+        10,
+        "--epochs",
+        help="Training epochs for remote execution",
+    ),
+    batch_size: int = typer.Option(
+        8,
+        "--batch-size",
+        help="Batch size for GPU dataloader",
+    ),
+) -> None:
+    """Generate self-contained headless Kaggle runner scripts and metadata."""
+    from src.bench.kaggle_runner import generate_kernel_scaffold
+
+    generate_kernel_scaffold(
+        kernel_dir=kernel_dir,
+        kernel_id=kernel_id,
+        enable_gpu=enable_gpu,
+        epochs=epochs,
+        batch_size=batch_size,
+    )
+
+
+@kaggle_app.command("push")
+def kaggle_push(
+    kernel_dir: Path = typer.Option(
+        Path("kaggle/kernels/aitod_train"),
+        "--kernel-dir",
+        "-k",
+        help="Directory containing kernel-metadata.json and runner.py",
+    ),
+) -> None:
+    """Push kernel job to Kaggle to trigger remote Dual T4 training."""
+    from src.bench.kaggle_runner import push_kernel
+
+    push_kernel(kernel_dir=kernel_dir)
+
+
+@kaggle_app.command("status")
+def kaggle_status(
+    kernel_id: str = typer.Option(
+        "miles2542/aitod-baseline-training",
+        "--kernel-id",
+        help="Kaggle kernel identifier",
+    ),
+) -> None:
+    """Check status of a running or queued Kaggle kernel."""
+    from src.bench.kaggle_runner import get_kernel_status
+
+    get_kernel_status(kernel_id=kernel_id)
+
+
+@kaggle_app.command("output")
+def kaggle_output(
+    kernel_id: str = typer.Option(
+        "miles2542/aitod-baseline-training",
+        "--kernel-id",
+        help="Kaggle kernel identifier",
+    ),
+    output_dir: Path = typer.Option(
+        Path("runs/kaggle"),
+        "--output-dir",
+        "-o",
+        help="Local directory to store downloaded weights and logs",
+    ),
+) -> None:
+    """Download weights and output logs from completed Kaggle kernel."""
+    from src.bench.kaggle_runner import download_kernel_output
+
+    download_kernel_output(kernel_id=kernel_id, output_dir=output_dir)
+
+
+@train_app.command("run")
+def train_run(
+    model: str = typer.Option(
+        "yolov8s",
+        "--model",
+        "-m",
+        help="Model architecture (yolov8s, yolo26s) or weights path",
+    ),
+    config: Path = typer.Option(
+        Path("configs/aitod_mini.yaml"),
+        "--config",
+        "-c",
+        help="Path to dataset YAML configuration",
+    ),
+    epochs: int = typer.Option(
+        1,
+        "--epochs",
+        "-e",
+        help="Number of training epochs",
+    ),
+    batch_size: int = typer.Option(
+        2,
+        "--batch-size",
+        "-b",
+        help="Batch size for dataloader",
+    ),
+    img_size: int = typer.Option(
+        800,
+        "--img-size",
+        "-s",
+        help="Input image resolution in pixels (AI-TOD standard: 800)",
+    ),
+    device: str = typer.Option(
+        "cpu",
+        "--device",
+        "-d",
+        help="Execution device (cpu, cuda:0, 0)",
+    ),
+    save_dir: Path | None = typer.Option(
+        None,
+        "--save-dir",
+        help="Destination directory for checkpoints and artifacts",
+    ),
+    fraction: float = typer.Option(
+        1.0,
+        "--fraction",
+        help="Fraction of dataset to train on (e.g. 0.01 for fast sanity check)",
+    ),
+    workers: int = typer.Option(
+        0,
+        "--workers",
+        help="Number of dataloader workers (0 for safe CPU dataloading)",
+    ),
+) -> None:
+    """Train baseline detection model (YOLOv8s or YOLO26s) on dataset configuration."""
+    from src.models.train import train_baseline
+
+    train_baseline(
+        model=model,
+        config=config,
+        epochs=epochs,
+        batch_size=batch_size,
+        img_size=img_size,
+        device=device,
+        save_dir=save_dir,
+        fraction=fraction,
+        workers=workers,
+    )
+
+
 @data_app.command("summary")
 def data_summary(
     config: Path = typer.Option(
@@ -122,7 +285,7 @@ def data_download(
     splits: list[str] | None = typer.Option(
         None,
         "--splits",
-        help="Splits to download for VisDrone (e.g. val train test-dev)",
+        help="Splits to download (e.g. val train test-dev)",
     ),
     sample_only: bool = typer.Option(
         False,
@@ -130,7 +293,7 @@ def data_download(
         help="Extract a small sample set of images for immediate benchmarking",
     ),
     sample_count: int = typer.Option(
-        50,
+        500,
         "--sample-count",
         help="Number of sample images to collect when --sample-only is active",
     ),
