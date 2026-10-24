@@ -21,6 +21,11 @@ Manage dependencies with `uv`:
 uv sync
 ```
 
+For zero-setup CLI execution on Windows, invoke `.\sod` directly from the repository root:
+```powershell
+.\sod --help
+```
+
 ---
 
 ## Unified CLI (`sod`)
@@ -29,29 +34,42 @@ The command-line interface provides end-to-end tooling for data ingestion, bench
 
 ```powershell
 # Top-level commands
-uv run sod --help
+.\sod --help
 ```
 
 ### 1. Data Ingestion & Preparation
 
 ```powershell
-# Download datasets (VisDrone2019-DET and AI-TOD-v2)
-uv run sod data download --dataset aitod-v2
+# Download datasets (VisDrone2019-DET and AI-TOD-v2 via direct Google Drive mirror)
+.\sod data download --dataset aitod-v2 --sample-only
 
 # Run exploratory data analysis and generate diagnostic plots in assets/eda/
-uv run sod data eda
+.\sod data eda
 
 # Generate stratified development split (1,000 train, 200 val) and YOLO labels
-uv run sod data prepare --train-size 1000 --val-size 200
+.\sod data prepare --train-size 1000 --val-size 200
 ```
 
 ### 2. Runtime & Hardware Profiling
 
 ```powershell
 # Benchmark YOLOv8s vs. YOLO26s latency, throughput, SAHI tiling, and RAM usage
-uv run sod bench runtime --img-size 800
+.\sod bench runtime --img-size 800
 ```
 Detailed performance profiling is documented in [`docs/benchmarks/runtime_profiling.md`](docs/benchmarks/runtime_profiling.md).
+
+### 3. Model Training & Cloud GPU Execution
+
+```powershell
+# Local baseline training (CPU / CUDA)
+.\sod train run --model yolov8s --config configs/aitod_mini.yaml --epochs 10 --device cpu
+
+# Headless Kaggle Dual-T4 GPU execution
+.\sod bench kaggle scaffold --epochs 10 --batch-size 8
+.\sod bench kaggle push
+.\sod bench kaggle status
+.\sod bench kaggle output
+```
 
 ---
 
@@ -68,15 +86,19 @@ small-object-detection/
 │   ├── dataset_analysis.md   # Scale diagnostics, stride collapse, and IoU sensitivity
 │   └── benchmarks/
 │       └── runtime_profiling.md # Latency, batch scaling, and VRAM/RAM analysis
+├── kaggle/
+│   └── kernels/aitod_train/  # Headless Dual T4 Kaggle runner scripts and metadata
 ├── src/
-│   ├── bench/                # Hardware and latency profiling logic
+│   ├── bench/                # Hardware latency and Kaggle remote runner logic
 │   ├── data/                 # Ingestion, EDA, sampling, and COCO-to-YOLO conversion
 │   ├── eval/                 # Dual-surface evaluation (COCO mAP & AI-TOD micro bins)
 │   ├── infer/                # Inference engine and SAHI slicing wrappers
-│   ├── models/               # Model configurations and custom head definitions
+│   ├── models/               # Model configurations, training pipeline, and custom heads
 │   ├── utils/                # UI presentation helpers and unified plotting styles
 │   └── cli.py                # Unified Typer CLI entrypoint (`sod`)
-├── scripts/                  # Lightweight entry point shims
+├── weights/                  # Local pretrained checkpoints (.pt)
+├── sod.ps1                   # Root PowerShell CLI wrapper
+├── sod.cmd                   # Root CMD CLI wrapper
 ├── pyproject.toml            # Project dependencies and script registration
 └── README.md
 ```

@@ -17,25 +17,30 @@ SUPPORTED_MODELS: dict[str, str] = {
     "yolo26s": "yolo26s.pt",
 }
 
+DEFAULT_WEIGHTS_DIR = Path("weights/pretrained")
+
 
 def resolve_model_weights(model_identifier: str) -> str:
-    """Resolve model weights file from identifier or path."""
+    """Resolve model weights file from identifier, local weights dir, or download name."""
     clean_id = model_identifier.lower().strip()
-    if clean_id in SUPPORTED_MODELS:
-        weights_name = SUPPORTED_MODELS[clean_id]
-        if Path(weights_name).exists():
-            return weights_name
-        return weights_name
+    target_filename = SUPPORTED_MODELS.get(clean_id, f"{clean_id}.pt" if not clean_id.endswith(".pt") else clean_id)
 
-    p = Path(model_identifier)
-    if p.exists():
-        return str(p)
+    # 1. Check local pretrained weights directory
+    local_in_dir = DEFAULT_WEIGHTS_DIR / target_filename
+    if local_in_dir.exists():
+        return str(local_in_dir)
 
-    candidate = Path(f"{model_identifier}.pt")
-    if candidate.exists():
-        return str(candidate)
+    # 2. Check direct path or root
+    direct_path = Path(model_identifier)
+    if direct_path.exists():
+        return str(direct_path)
 
-    return model_identifier
+    in_root = Path(target_filename)
+    if in_root.exists():
+        return str(in_root)
+
+    # 3. Return target filename so Ultralytics automatically downloads from official CDN
+    return target_filename
 
 
 def train_baseline(
@@ -48,116 +53,73 @@ def train_baseline(
     save_dir: Path | str | None = None,
     fraction: float = 1.0,
     workers: int = 0,
-    seed: int = 42,
-    val: bool = True,
-    exist_ok: bool = True,
 ) -> dict[str, Any]:
-    """Execute baseline model training on dataset configuration.
+    """Execute training run for a baseline model on configured dataset."""
+    weights_path = resolve_model_weights(model)
+    config_path = Path(config)
 
-    Args:
-        model: Model architecture name (e.g. 'yolov8s', 'yolo26s') or weights path.
-        config: Path to dataset YAML configuration file.
-        epochs: Number of training epochs.
-        batch_size: Batch size for dataloader.
-        img_size: Input image resolution in pixels (default: 800 for AI-TOD standard).
-        device: Computation device ('cpu', '0', 'cuda:0', etc.).
-        save_dir: Destination directory for training artifacts and checkpoints.
-        fraction: Fraction of dataset to train on (default 1.0; e.g. 0.01 for sanity runs).
-        workers: Number of dataloader worker processes (default: 0 for CPU/Windows safety).
-        seed: Random seed for deterministic reproducibility.
-        val: Whether to run validation after training.
-        exist_ok: Whether to overwrite existing run directory.
-
-    Returns:
-        Structured dictionary containing training metrics, checkpoint paths, and run config.
-    """
-    config_path = Path(config).resolve()
     if not config_path.exists():
-        msg = f"Dataset configuration YAML not found at: {config_path}"
-        ui.print_error(msg)
-        raise FileNotFoundError(msg)
+        raise FileNotFoundError(f"Dataset config not found at: {config_path}")
 
-    weights_target = resolve_model_weights(model)
     ui.print_header(
-        "Baseline Model Training Pipeline",
-        f"Model: {model} ({weights_target}) | Config: {config_path.name} | Device: {device}",
+        "Baseline Model Training",
+        f"Model: {model} ({weights_path}) | Config: {config_path} | Device: {device} | Epochs: {epochs}",
     )
 
-    if save_dir:
-        resolved_save_dir = Path(save_dir).resolve()
-        project_dir = str(resolved_save_dir.parent)
-        run_name = resolved_save_dir.name
-    else:
-        project_dir = str(Path("runs/train").resolve())
-        run_name = f"{model}_{config_path.stem}"
-
-    ui.print_info(f"Loading model weights from {weights_target}...")
-    yolo_model = YOLO(weights_target)
-
-    ui.print_info(
-        f"Beginning training: {epochs} epoch(s), batch {batch_size}, "
-        f"imgsz {img_size}, fraction {fraction}, device {device}"
+    actual_save_dir = (
+        Path(save_dir) if save_dir else Path(f"runs/train/{model.replace('.pt', '')}_aitod_mini")
     )
+    actual_save_dir.parent.mkdir(parents=True, exist_ok=True)
 
-    train_results = yolo_model.train(
+    yolo_model = YOLO(weights_path)
+
+    results = yolo_model.train(
         data=str(config_path),
         epochs=epochs,
         batch=batch_size,
         imgsz=img_size,
         device=device,
-        project=project_dir,
-        name=run_name,
-        fraction=fraction,
+        project=str(actual_save_dir.parent),
+        name=actual_save_dir.name,
         workers=workers,
-        seed=seed,
-        val=val,
-        exist_ok=exist_ok,
+        fraction=fraction,
+        plots=True,
+        exist_ok=True,
         verbose=True,
     )
 
-    actual_save_dir = Path(project_dir) / run_name
     best_weights = actual_save_dir / "weights" / "best.pt"
     last_weights = actual_save_dir / "weights" / "last.pt"
 
-    # Extract metrics safely from Ultralytics training results
-    metrics_summary: dict[str, Any] = {}
-    if hasattr(train_results, "results_dict") and isinstance(train_results.results_dict, dict):
-        metrics_summary = train_results.results_dict
-    elif hasattr(train_results, "box") and train_results.box is not None:
-        metrics_summary = {
-            "metrics/mAP50(B)": getattr(train_results.box, "map50", 0.0),
-            "metrics/mAP50-95(B)": getattr(train_results.box, "map", 0.0),
-        }
+    ui.print_success(f"Training run completed. Checkpoints stored at {actual_save_dir / 'weights'}")
 
     summary: dict[str, Any] = {
         "model": model,
-        "weights": weights_target,
         "config": str(config_path),
-        "epochs": epochs,
+        "epochs_completed": epochs,
         "batch_size": batch_size,
-        "img_size": img_size,
+        "resolution": f"{img_size}x{img_size}",
         "device": device,
-        "save_dir": str(actual_save_dir),
-        "best_weights": str(best_weights) if best_weights.exists() else None,
-        "last_weights": str(last_weights) if last_weights.exists() else None,
-        "metrics": metrics_summary,
+        "best_checkpoint": str(best_weights) if best_weights.exists() else None,
+        "last_checkpoint": str(last_weights) if last_weights.exists() else None,
+        "map50": float(getattr(results, "results_dict", {}).get("metrics/mAP50(B)", 0.0)),
+        "map50_95": float(getattr(results, "results_dict", {}).get("metrics/mAP50-95(B)", 0.0)),
     }
 
-    ui.print_success(f"Training run completed. Checkpoints stored at {actual_save_dir / 'weights'}")
     ui.print_table(
-        "Training Run Summary",
-        ["Parameter / Metric", "Value"],
-        [
-            ["Model", model],
-            ["Config", config_path.name],
-            ["Epochs Completed", str(epochs)],
-            ["Batch Size", str(batch_size)],
-            ["Resolution", f"{img_size}x{img_size}"],
-            ["Device", device],
-            ["Best Checkpoint", str(best_weights) if best_weights.exists() else "None"],
-            ["Last Checkpoint", str(last_weights) if last_weights.exists() else "None"],
-            ["mAP50(B)", f"{metrics_summary.get('metrics/mAP50(B)', 0.0):.4f}"],
-            ["mAP50-95(B)", f"{metrics_summary.get('metrics/mAP50-95(B)', 0.0):.4f}"],
+        title="Training Run Summary",
+        columns=["Parameter / Metric", "Value"],
+        rows=[
+            ["Model", summary["model"]],
+            ["Config", summary["config"]],
+            ["Epochs Completed", str(summary["epochs_completed"])],
+            ["Batch Size", str(summary["batch_size"])],
+            ["Resolution", summary["resolution"]],
+            ["Device", summary["device"]],
+            ["Best Checkpoint", summary["best_checkpoint"] or "N/A"],
+            ["Last Checkpoint", summary["last_checkpoint"] or "N/A"],
+            ["mAP50(B)", f"{summary['map50']:.4f}"],
+            ["mAP50-95(B)", f"{summary['map50_95']:.4f}"],
         ],
     )
 

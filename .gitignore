@@ -6,10 +6,12 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.ipynb_checkpoints/
+.ruff_cache/
 
 # Datasets, Weights & Large Artifacts
 /data/
 /datasets/
+/weights/
 *.pt
 *.pth
 *.onnx
@@ -24,9 +26,6 @@ wandb/
 mlruns/
 lightning_logs/
 *.log
-
-# Benchmarks
-benchmarks/*.json
 
 # Internal Dev
 AGENTS.md
