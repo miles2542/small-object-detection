@@ -164,3 +164,59 @@ Milestone 1 delivers the verified foundation, EDA, and baseline pipeline. Subseq
 ### Member 6 (Benchmarking Synthesis, Final Report & Defense)
 - **Role:** Consolidate cross-model ablation metrics, generate comparative tables, and prepare project defense materials.
 - **Key Deliverable:** Aggregate validation curves, confusion matrices, and results from `runs/train/` and `runs/kaggle/`. Author the final academic paper and presentation slides comparing standard YOLOv8s vs. YOLO26s with $P_2$, SAHI, and NWD ablations.
+
+---
+
+## 6. Git branch and pull request workflow
+
+The `main` branch is protected against direct pushes to safeguard shared baseline code and configurations. All contributions must be completed on a dedicated feature branch and merged via GitHub Pull Requests.
+
+> [!NOTE]
+> Teammates are not expected to worry about manual code formatting or running linters before pushing. Work freely on your task; the lead orchestrator reviews and handles lint passes prior to merging.
+
+### Step 1: Create a feature branch
+Before making edits, create a new branch from `main`:
+
+- **Using VS Code GUI:**
+  1. Click the current branch name (`main`) in the bottom-left status bar (or open the **Source Control** tab `Ctrl+Shift+G` $\rightarrow$ click `...` $\rightarrow$ **Branch** $\rightarrow$ **Create Branch...**).
+  2. Enter a descriptive branch name, e.g.:
+     - Member 2: `feat/m2-evaluation-coco`
+     - Member 3: `feat/m3-p2-stride-head`
+     - Member 4: `feat/m4-sahi-inference`
+     - Member 5: `feat/m5-nwd-loss`
+     - Member 6: `feat/m6-benchmarking-report`
+- **Using VS Code Terminal:**
+  ```powershell
+  git checkout -b feat/m2-evaluation-coco
+  ```
+
+### Step 2: Implement and commit your changes
+Work normally in your branch:
+
+- **Using VS Code GUI:**
+  1. Open the **Source Control** view (`Ctrl+Shift+G`).
+  2. Click the `+` icon next to modified files to stage them.
+  3. Enter a clear commit message in the text box above (e.g. `feat: add COCO evaluation script for micro-scale metrics`).
+  4. Click **Commit** (or press `Ctrl+Enter`).
+- **Using VS Code Terminal:**
+  ```powershell
+  git add .
+  git commit -m "feat: add COCO evaluation script for micro-scale metrics"
+  ```
+
+### Step 3: Push your branch to GitHub
+Once your work is committed and ready for review:
+
+- **Using VS Code GUI:**
+  - Click the blue **Publish Branch** button in the Source Control panel or status bar.
+- **Using VS Code Terminal:**
+  ```powershell
+  git push -u origin feat/m2-evaluation-coco
+  ```
+
+### Step 4: Open a Pull Request on GitHub Web
+1. Open the repository in your browser: [https://github.com/miles2542/small-object-detection](https://github.com/miles2542/small-object-detection)
+2. You will see a banner at the top: **"feat/... had recent pushes ... Compare & pull request"**. Click the green button.
+   *(If not shown, go to **Pull requests** tab $\rightarrow$ click **New pull request** $\rightarrow$ select `base: main` and `compare: your-branch`).*
+3. Provide a brief summary of what was implemented or tested.
+4. Click **Create pull request**. The lead will review and merge into `main`.
