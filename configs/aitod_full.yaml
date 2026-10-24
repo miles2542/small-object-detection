@@ -1,0 +1,17 @@
+# Ultralytics dataset configuration for AI-TOD-v2 (Full Dataset)
+# Generated for complete benchmark training runs
+
+path: data/ai-tod-v2/splits/full
+train: images/train
+val: images/val
+
+# AI-TOD-v2 0-indexed canonical classes
+names:
+  0: airplane
+  1: bridge
+  2: storage-tank
+  3: ship
+  4: swimming-pool
+  5: vehicle
+  6: person
+  7: wind-mill

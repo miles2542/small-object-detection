@@ -13,167 +13,154 @@ Install dependencies using `uv`:
 uv sync
 ```
 
-### CLI wrappers
-On Windows (PowerShell or CMD), invoke the root CLI wrapper directly:
+### Virtual environment activation (Recommended)
+
+To ensure tools, Python interpreters, and CLI scripts operate cleanly without path issues across all terminals:
+
+```powershell
+# Windows PowerShell (Recommended)
+.venv\Scripts\Activate.ps1
+
+# Windows Command Prompt (CMD)
+.venv\Scripts\activate.bat
+
+# Linux / macOS
+source .venv/bin/activate
+```
+
+Once activated, invoke commands directly:
+```powershell
+sod --help
+```
+
+*Note for Windows users:* If you do not activate the environment, invoke the native root wrapper directly:
 ```powershell
 .\sod --help
 ```
 
-On Linux or macOS:
-```bash
-uv run sod --help
-# or directly via module entrypoint:
-uv run python -m src.cli --help
-```
-
-Pretrained weights (`yolov8s.pt`, `yolo26s.pt`) resolve automatically from `weights/pretrained/` or download on first invocation.
+Pretrained weights (`yolov8s.pt`, `yolo26s.pt`) resolve automatically from `weights/pretrained/` or download autonomously from Ultralytics releases on first invocation.
 
 ---
 
-## 2. Dataset preparation
+## 2. Kaggle cloud GPU API setup
+
+For heavy multi-epoch training sweeps and ablation matrices on Kaggle's Dual NVIDIA Tesla T4 GPUs (30 hours/week free tier):
+
+1. Log into [Kaggle](https://www.kaggle.com/) $\rightarrow$ **Settings** $\rightarrow$ scroll to **API *(The new, recommended one, not the legacy)*** $\rightarrow$ click **Create New Token**.
+2. Save your API token:
+   - On Windows PowerShell:
+     ```powershell
+     $kaggleDir = "$env:USERPROFILE\.kaggle"
+     if (-not (Test-Path $kaggleDir)) { New-Item -ItemType Directory -Path $kaggleDir -Force | Out-Null }
+     Set-Content -Path "$kaggleDir\access_token" -Value "YOUR_KGAT_TOKEN_HERE" -NoNewline
+     ```
+   - On Linux / macOS:
+     ```bash
+     mkdir -p ~/.kaggle && echo "<YOUR_KGAT_TOKEN_HERE>" > ~/.kaggle/access_token && chmod 600 ~/.kaggle/access_token
+     ```
+3. Test connectivity:
+   ```powershell
+   kaggle competitions list
+   ```
+
+---
+
+## 3. Dataset preparation
 
 AI-TOD-v2 contains 376,625 annotations across 14,018 aerial images ($800 \times 800$ resolution), with 86.54% of targets measuring $\le 16$ px.
 
-### Step 1: Download annotations and imagery
-```powershell
-# Fast sample download for immediate testing
-.\sod data download --dataset aitod-v2 --sample-only
+### Step 1: Download imagery and annotations
 
-# Or download full splits for complete training sweeps
-.\sod data download --dataset aitod-v2 --splits train val
+The pipeline downloads directly from verified Google Drive mirrors with zero manual token configuration:
+
+```powershell
+# Primary: Download full AI-TOD-v2 dataset splits for complete training sweeps
+sod data download --dataset aitod-v2 --splits train val
+
+# Quick verification: Download small 500-image sample subset
+sod data download --dataset aitod-v2 --sample-only --sample-count 500
 ```
 
-### Step 2: Generate stratified mini split
-Generate the balanced development split (1,000 train images, 200 validation images) preserving category ratios and micro-scale bins ($AP_{vt}, AP_t, AP_s, AP_m$):
+### Step 2: Generate dataset splits and YOLO labels
+
 ```powershell
-.\sod data prepare --train-size 1000 --val-size 200
+# Primary: Prepare full dataset for 100% benchmark runs (writes configs/aitod_full.yaml)
+sod data prepare --train-size 0 --val-size 0 --output-dir data/ai-tod-v2/splits/full --config-yaml configs/aitod_full.yaml
+
+# Local development: Generate stratified 1,000-train / 200-val development split
+sod data prepare --train-size 1000 --val-size 200 --output-dir data/ai-tod-v2/splits/mini --config-yaml configs/aitod_mini.yaml
 ```
-This command:
-- Filters 40+ zero-dimension degenerate boxes ($w \le 0$ or $h \le 0$) from raw COCO annotations.
-- Exports sanitized YOLO format label files (`.txt`) to `data/ai-tod-v2/splits/mini/`.
-- Writes the dataset definition to `configs/aitod_mini.yaml`.
+
+The converter automatically:
+- Filters degenerate zero-dimension annotations ($w \le 0$ or $h \le 0$) to protect loss functions from NaN divergence.
+- Normalizes coordinates $[x, y, w, h]$ to bounded $[0.0, 1.0]$.
+- Harmonizes category indices to standard 0-indexed AI-TOD IDs (`0: airplane, 1: bridge, 2: storage-tank, 3: ship, 4: swimming-pool, 5: vehicle, 6: person, 7: wind-mill`).
 
 ---
 
-## 3. Execution profiles
+## 4. Execution profiles
 
-Select the execution profile matching available compute:
+The training engine auto-detects hardware: `--device` automatically selects CUDA GPU (`0`) if available, falling back to `cpu`. Default batch size auto-scales to `16` on GPU and `4` on CPU.
 
-### Profile A: Local CPU or Apple silicon (debugging and sanity checks)
-```powershell
-.\sod train run --model yolov8s --config configs/aitod_mini.yaml --epochs 1 --batch-size 2 --device cpu
-```
-- Throughput: $\sim 0.45\text{ imgs/s}$.
-- Memory: $\sim 1.5\text{ GB}$ system RAM.
-- Use case: Code path verification, config sanity, dataloader checks.
-
-### Profile B: Local CUDA GPU (e.g., RTX 3060 laptop, 6GB-12GB VRAM)
-```powershell
-.\sod train run --model yolo26s --config configs/aitod_mini.yaml --epochs 10 --batch-size 8 --device 0
-```
-- Throughput: $\sim 45\text{--}65\text{ imgs/s}$.
-- Memory: $\sim 4.2\text{ GB}$ VRAM at batch size 8.
-- Use case: Multi-epoch baseline training, rapid architecture iterations.
-
-### Profile C: Headless cloud GPU (Kaggle dual Tesla T4, 2x 15GB VRAM)
-Requires Kaggle API token configured at `~/.kaggle/kaggle.json`.
+### Profile A: Cloud Kaggle Dual-T4 GPU (Primary / Recommended)
+Trains 1,000 images in **16.4 seconds per epoch** ($136.4\times$ speedup over high mid-range desktop CPU).
 
 ```powershell
-# 1. Generate Kaggle kernel runner script and metadata
-.\sod bench kaggle scaffold --epochs 10 --batch-size 8
+# 1. Generate Kaggle kernel runner script and metadata (batch 16, dual GPU enabled)
+sod bench kaggle scaffold --epochs 10 --batch-size 16
 
 # 2. Push kernel to start remote Dual T4 training
-.\sod bench kaggle push
+sod bench kaggle push
 
 # 3. Poll kernel execution status
-.\sod bench kaggle status
+sod bench kaggle status
 
 # 4. Download trained weights and run artifacts
-.\sod bench kaggle output --output-dir runs/kaggle
+sod bench kaggle output --output-dir runs/kaggle
 ```
-- Throughput: $61.36\text{ imgs/s}$ (YOLOv8s at batch size 16).
-- Memory: $5,110\text{ MB}$ VRAM ($34.1\%$ utilization).
-- Use case: 100-epoch full runs, multi-model factorial sweeps.
 
----
+### Profile B: Local CUDA GPU (e.g., RTX 3060 Laptop)
+Auto-detects GPU and batch size 16:
+```powershell
+sod train run --model yolo26s --config configs/aitod_mini.yaml --epochs 10
+```
 
-## 4. Checkpoints and downstream integration
-
-### Checkpoint storage locations
-Local training runs output checkpoints and metrics to `runs/train/`:
-- Best checkpoint: `runs/train/<model>_aitod_mini/weights/best.pt`
-- Last checkpoint: `runs/train/<model>_aitod_mini/weights/last.pt`
-- Training metrics and logs: `runs/train/<model>_aitod_mini/results.csv`
-- Verification curves: `runs/train/<model>_aitod_mini/confusion_matrix.png`
-
-Kaggle outputs download to `runs/kaggle/` via `.\sod bench kaggle output`.
-
-### Loading checkpoints in Python
-```python
-from ultralytics import YOLO
-
-# Load best checkpoint from training run
-model = YOLO("runs/train/yolov8s_aitod_mini/weights/best.pt")
-
-# Run inference on native 800x800 test image
-results = model.predict(
-    source="data/ai-tod-v2/splits/mini/images/val",
-    imgsz=800,
-    conf=0.25,
-    device="cpu",  # or 0 for CUDA
-)
+### Profile C: Local CPU or Apple Silicon (Fast sanity checks)
+```powershell
+sod train run --model yolov8s --config configs/aitod_mini.yaml --epochs 1 --fraction 0.05
 ```
 
 ---
 
-## 5. Downstream milestone integration
+## 5. Next tasks & member assignments
 
-Baseline checkpoints and splits feed into the following subsequent tracks:
+Milestone 1 delivers the verified foundation, EDA, and baseline pipeline. Subsequent project tasks are distributed across team members as follows:
 
-### Size-based evaluation track
-Standard aggregate mAP masks microscopic object failure. Downstream evaluation pipelines load baseline weights and execute dual-surface evaluation:
-- Run inference across the validation split.
-- Pipe prediction bounding boxes into the AI-TOD evaluator.
-- Decompose performance across micro-scale intervals:
-  - Very Tiny ($AP_{vt}$): Area $\in (2, 8]$ px.
-  - Tiny ($AP_t$): Area $\in (8, 16]$ px.
-  - Small ($AP_s$): Area $\in (16, 32]$ px.
-  - Medium ($AP_m$): Area $\in (32, 64]$ px.
+### Member 1
+- **Completed (M1):** Ingestion pipeline, empirical EDA (`docs/dataset_analysis.md`), stratified mini-split converter (`src/data/`), baseline training engine (`src/models/train.py`), Kaggle remote runner orchestration, and repository curation.
+- **Ongoing Responsibilities:** Code review and milestone integration across all teammate PRs, remote Kaggle cloud compute coordination, and overall system architecture integrity.
 
-### P2 high-resolution stride track
-AI-TOD median target size (11.83 px) collapses to $1.48 \times 1.48$ cells at P3 (stride 8) and $< 1$ cell at P4/P5.
-- Downstream architecture modifications introduce a stride-4 ($P_2$) detection head to preserve $2.96 \times 2.96$ feature representation cells for median targets.
-- Train the modified P2 network against `configs/aitod_mini.yaml` using baseline checkpoints as initialization.
+### Member 2 (Size-Based Dual-Surface Evaluation)
+- **Role:** Build and integrate the fine-grained micro-scale evaluation module in `src/eval/`.
+- **Key Deliverable:** Standard aggregate $mAP_{50:95}$ obscures microscopic target loss. Implement evaluation pipelines that ingest baseline predictions and calculate AP across official AI-TOD scale bins:
+  - Very Tiny ($AP_{vt}$): $\text{scale} \le 8$ px.
+  - Tiny ($AP_t$): $8 < \text{scale} \le 16$ px.
+  - Small ($AP_s$): $16 < \text{scale} \le 32$ px.
+  - Medium ($AP_m$): $32 < \text{scale} \le 64$ px.
+- **Reference Checkpoints:** `runs/train/yolov8s_aitod_mini/weights/best.pt` and `yolo26s_aitod_mini/weights/best.pt`.
 
-### SAHI sliced inference track
-Slicing divides high-resolution $800 \times 800$ frames into smaller patches (e.g. $320 \times 320$, overlap 0.25) to amplify relative object pixel dimensions before NMS/NMM merging.
-- Use baseline `best.pt` models inside SAHI inference wrappers:
-```python
-from sahi import AutoDetectionModel
-from sahi.predict import get_sliced_prediction
+### Member 3 (Architecture Modification — P2 High-Resolution Stride Head)
+- **Role:** Modify model architectures in `src/models/` to introduce a $P_2$ ($4\times$ downsampling stride) feature pyramid head.
+- **Key Deliverable:** Our EDA proved that median targets (11.83 px) collapse to $1.48 \times 1.48$ cells at $P_3$ and $<1$ cell at $P_4/P_5$. Implement a high-resolution $P_2$ detection head to preserve $2.96 \times 2.96$ spatial cells. Train and compare against baseline YOLOv8s/YOLO26s.
 
-detection_model = AutoDetectionModel.from_pretrained(
-    model_type="yolov8",
-    model_path="runs/train/yolov8s_aitod_mini/weights/best.pt",
-    confidence_threshold=0.25,
-    device="cpu",
-)
+### Member 4 (Slicing-Aided Hyper Inference — SAHI)
+- **Role:** Benchmark and optimize sliced patch inference in `src/infer/`.
+- **Key Deliverable:** Tune SAHI slicing windows (e.g. $512 \times 512$ with 0.2 overlap) on $800 \times 800$ frames. Evaluate the trade-off between localization recovery on micro targets versus the established $\sim 3.5\times$ computational latency overhead.
 
-result = get_sliced_prediction(
-    "data/ai-tod-v2/splits/mini/images/val/sample.jpg",
-    detection_model,
-    slice_height=320,
-    slice_width=320,
-    overlap_height_ratio=0.25,
-    overlap_width_ratio=0.25,
-)
-```
+### Member 5 (Loss Function Ablation — NWD)
+- **Role:** Implement Normalized Gaussian Wasserstein Distance (NWD) loss in `src/models/`.
+- **Key Deliverable:** Small bounding box IoU drops from 1.0 to 0.47 under a 2-pixel shift. Integrate NWD loss to provide smooth distance gradients for sub-16px boxes, replacing or supplementing CIoU/DFL, and benchmark convergence improvements.
 
-### Loss ablation track (NWD)
-Tiny bounding box IoU collapses rapidly under 1-to-2 pixel spatial deviations, starving standard anchor assigners of positive labels.
-- Downstream loss ablations introduce Normalized Gaussian Wasserstein Distance (NWD) loss to provide smooth distance gradients for sub-16px boxes.
-- Benchmark NWD loss variants against baseline CIoU / DFL loss runs.
-
-### Reporting and synthesis track
-- Extract scalar metrics from `runs/train/<run_id>/results.csv`.
-- Aggregate precision-recall curves, confusion matrices, and validation batches from run directories for publication figures.
+### Member 6 (Benchmarking Synthesis, Final Report & Defense)
+- **Role:** Consolidate cross-model ablation metrics, generate comparative tables, and prepare project defense materials.
+- **Key Deliverable:** Aggregate validation curves, confusion matrices, and results from `runs/train/` and `runs/kaggle/`. Author the final academic paper and presentation slides comparing standard YOLOv8s vs. YOLO26s with $P_2$, SAHI, and NWD ablations.

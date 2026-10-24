@@ -188,22 +188,22 @@ def train_run(
         help="Model architecture (yolov8s, yolo26s) or weights path",
     ),
     config: Path = typer.Option(
-        Path("configs/aitod_mini.yaml"),
+        Path("configs/aitod_full.yaml") if Path("configs/aitod_full.yaml").exists() else Path("configs/aitod_mini.yaml"),
         "--config",
         "-c",
-        help="Path to dataset YAML configuration",
+        help="Path to dataset YAML configuration (defaults to full if present)",
     ),
     epochs: int = typer.Option(
-        1,
+        10,
         "--epochs",
         "-e",
         help="Number of training epochs",
     ),
-    batch_size: int = typer.Option(
-        2,
+    batch_size: int | None = typer.Option(
+        None,
         "--batch-size",
         "-b",
-        help="Batch size for dataloader",
+        help="Batch size for dataloader (auto-defaults to 16 on GPU, 4 on CPU)",
     ),
     img_size: int = typer.Option(
         800,
@@ -211,11 +211,11 @@ def train_run(
         "-s",
         help="Input image resolution in pixels (AI-TOD standard: 800)",
     ),
-    device: str = typer.Option(
-        "cpu",
+    device: str | None = typer.Option(
+        None,
         "--device",
         "-d",
-        help="Execution device (cpu, cuda:0, 0)",
+        help="Execution device (auto-detects CUDA GPU if available, else CPU)",
     ),
     save_dir: Path | None = typer.Option(
         None,
@@ -228,9 +228,9 @@ def train_run(
         help="Fraction of dataset to train on (e.g. 0.01 for fast sanity check)",
     ),
     workers: int = typer.Option(
-        0,
+        2,
         "--workers",
-        help="Number of dataloader workers (0 for safe CPU dataloading)",
+        help="Number of dataloader workers (default: 2)",
     ),
 ) -> None:
     """Train baseline detection model (YOLOv8s or YOLO26s) on dataset configuration."""
