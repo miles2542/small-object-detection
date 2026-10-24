@@ -26,11 +26,13 @@ For zero-setup CLI execution on Windows, invoke `.\sod` directly from the reposi
 .\sod --help
 ```
 
+For platform-specific execution profiles (CPU, RTX 3060 CUDA, Kaggle Dual T4) and downstream track integration, refer to the [Team Quickstart & Handoff Guide](docs/team_quickstart.md).
+
 ---
 
 ## Unified CLI (`sod`)
 
-The command-line interface provides end-to-end tooling for data ingestion, benchmarking, training, and evaluation:
+The command-line interface provides end-to-end tooling for data ingestion, benchmarking, training, and evaluation. Detailed walkthrough and parameter flags are documented in [`docs/team_quickstart.md`](docs/team_quickstart.md).
 
 ```powershell
 # Top-level commands
@@ -56,7 +58,7 @@ The command-line interface provides end-to-end tooling for data ingestion, bench
 # Benchmark YOLOv8s vs. YOLO26s latency, throughput, SAHI tiling, and RAM usage
 .\sod bench runtime --img-size 800
 ```
-Detailed performance profiling is documented in [`docs/benchmarks/runtime_profiling.md`](docs/benchmarks/runtime_profiling.md).
+Detailed performance profiling is documented in [`docs/benchmarks/runtime_profiling.md`](docs/benchmarks/runtime_profiling.md) and [`docs/benchmarks/training_throughput_profiling.md`](docs/benchmarks/training_throughput_profiling.md).
 
 ### 3. Model Training & Cloud GPU Execution
 
@@ -83,9 +85,11 @@ small-object-detection/
 │   ├── default.yaml          # Default dataset paths and evaluation scale bins
 │   └── aitod_mini.yaml       # 1,000-image stratified development dataset config
 ├── docs/
+│   ├── team_quickstart.md    # Team onboarding, compute profiles, and downstream handoff
 │   ├── dataset_analysis.md   # Scale diagnostics, stride collapse, and IoU sensitivity
 │   └── benchmarks/
-│       └── runtime_profiling.md # Latency, batch scaling, and VRAM/RAM analysis
+│       ├── runtime_profiling.md             # Latency, batch scaling, and VRAM/RAM analysis
+│       └── training_throughput_profiling.md # CPU vs. Kaggle Dual T4 empirical profiling
 ├── kaggle/
 │   └── kernels/aitod_train/  # Headless Dual T4 Kaggle runner scripts and metadata
 ├── src/
