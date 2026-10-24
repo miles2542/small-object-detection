@@ -1,13 +1,13 @@
-# AI-TOD-v2 exploratory data analysis and scale diagnostic report
+# AI-TOD-v2 Exploratory Data Analysis and Scale Diagnostic Report
 
 **Dataset:** AI-TOD-v2 ($800 \times 800$ aerial imagery, micro-scale targets)  
 **Annotations analyzed:** 376,625 instances across 14,018 images (trainval)  
 **Splits evaluated:** `aitodv2_train.json` (11,214 images, 301,534 annotations), `aitod_val.json` (2,804 images, 70,424 annotations), `aitodv2_trainval.json` (14,018 images, 376,625 annotations)  
-**Tooling/Environment:** Python 3.11, Pandas, NumPy, Matplotlib, Seaborn (`scripts/eda_aitod.py`)  
+**Tooling/Environment:** Python 3.11, Pandas, NumPy, Matplotlib, Seaborn (`src.data.eda` / `sod data eda`)  
 
 ---
 
-## 1. Executive summary and scale diagnostic findings
+## 1. Executive Summary & Scale Diagnostic Findings
 
 - **Extreme micro-scale concentration:** Across the dataset (376,625 annotations in trainval), median object scale $\sqrt{w \times h}$ is **11.83 px** (mean: **12.67 px**). **86.54%** of all targets (325,898 instances) measure $\le 16$ px ($AP_{vt} + AP_t$). In contrast to MS COCO where objects $< 32$ px represent $\sim 32\%$ of instances, **98.20%** (369,816 instances) of AI-TOD-v2 targets fall below 32 px.
 - **Downsampling stride feature collapse:**
@@ -21,31 +21,31 @@
 
 ---
 
-## 2. Visual diagnostics
+## 2. Visual Diagnostics
 
-### Scale distribution
-![Scale distribution](scale_distribution.png)
+### Scale Distribution
+![Scale distribution](../assets/eda/scale_distribution.png)
 *Figure 1: Empirical scale distribution ($\sqrt{w \times h}$) in pixels across the AI-TOD-v2 train split. Vertical dashed lines mark AI-TOD evaluation bins ($AP_{vt} \le 8$ px, $AP_t \in (8, 16]$ px, $AP_s \in (16, 32]$ px, $AP_m \in (32, 64]$ px). 86.46% of training instances fall within $AP_{vt}$ and $AP_t$ ($\le 16$ px), with median scale 11.83 px and mean scale 12.72 px.*
 
-### Bounding box geometry and aspect ratio
-![Aspect ratio distribution](aspect_ratio_distribution.png)
+### Bounding Box Geometry & Aspect Ratio
+![Aspect ratio distribution](../assets/eda/aspect_ratio_distribution.png)
 *Figure 2: Empirical aspect ratio distribution and joint dimension density. Left: Histogram and KDE of aspect ratio ($w / h$), showing a sharp peak at median 1.00. Right: Log-scale 2D hexbin of width versus height, confirming a dense cluster at $w, h \in [10, 15]$ px.*
 
-### Category scale breakdown
-![Category scale breakdown](category_scale_breakdown.png)
+### Category Scale Breakdown
+![Category scale breakdown](../assets/eda/category_scale_breakdown.png)
 *Figure 3: Scale bin composition per object category. Vehicles (87.95% of train annotations) and persons have over 95% instances $\le 16$ px ($AP_{vt} + AP_t$). Spatially extended categories (bridges, swimming pools) exhibit broader representations across $AP_s$ and $AP_m$.*
 
-### Benchmark scale comparison against MS COCO
-![AI-TOD vs COCO comparison](aitod_vs_coco_comparison.png)
+### Benchmark Scale Comparison against MS COCO
+![AI-TOD vs COCO comparison](../assets/eda/aitod_vs_coco_comparison.png)
 *Figure 4: Empirical scale comparison between AI-TOD-v2 and MS COCO standard definitions. Left: Dataset breakdown under COCO thresholds ($<32$, $32-96$, $>96$ px), where 98.17% of AI-TOD-v2 is classified as small. Right: Decomposition of AI-TOD-v2 across fine-grained evaluation bins, revealing that 86.46% of instances reside below 16 px.*
 
 ---
 
-## 3. Empirical class and scale distribution
+## 3. Empirical Class and Scale Distribution
 
-### Scale metrics across dataset splits
+### Scale Metrics Across Dataset Splits
 
-| Metric | Train split | Validation split | Trainval split |
+| Metric | Train Split | Validation Split | Trainval Split |
 | :--- | :--- | :--- | :--- |
 | **Total images** | 11,214 | 2,804 | 14,018 |
 | **Total annotations** | 301,534 | 70,424 | 376,625 |
@@ -58,9 +58,9 @@
 | **25th - 75th percentile** | 9.80 - 14.14 px | 9.38 - 14.14 px | 9.80 - 14.07 px |
 | **5th - 95th percentile** | 6.71 - 22.23 px | 6.00 - 22.45 px | 6.71 - 22.00 px |
 
-### Scale bin distribution
+### Scale Bin Distribution
 
-| Scale bin | Range (pixels) | Train count (%) | Validation count (%) | Trainval count (%) |
+| Scale Bin | Range (pixels) | Train Count (%) | Validation Count (%) | Trainval Count (%) |
 | :--- | :--- | :--- | :--- | :--- |
 | **$AP_{vt}$ (Very Tiny)** | $\le 8$ px | 38,942 (12.92%) | 10,784 (15.31%) | 50,002 (13.28%) |
 | **$AP_t$ (Tiny)** | $8 - 16$ px | 221,721 (73.54%) | 49,724 (70.61%) | 275,896 (73.26%) |
@@ -70,9 +70,9 @@
 | **Micro sub-total ($AP_{vt} + AP_t$)** | $\le 16$ px | **260,663 (86.46%)** | **60,508 (85.92%)** | **325,898 (86.54%)** |
 | **COCO Small equivalent** | $< 32$ px | **295,992 (98.17%)** | **69,108 (98.13%)** | **369,816 (98.20%)** |
 
-### Category distribution across splits
+### Category Distribution Across Splits
 
-| Category | Train count | Train % | Val count | Val % | Trainval count | Trainval % |
+| Category | Train Count | Train % | Val Count | Val % | Trainval Count | Trainval % |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **vehicle** | 265,164 | 87.95% | 59,904 | 85.06% | 329,404 | 87.47% |
 | **person** | 14,446 | 4.79% | 3,841 | 5.45% | 18,306 | 4.86% |
@@ -85,10 +85,9 @@
 
 ---
 
-## 4. Architectural implications
+## 4. Architectural Implications & Team Design Decisions
 
-### Feature map stride collapse at P2, P3, P4, and P5
-
+### Feature Map Stride Collapse at P2, P3, P4, and P5
 Standard YOLO object detection backbones downsample input imagery across successive feature pyramid network (FPN) stages:
 - **P2 (stride 4, $H/4 \times W/4$):** An 11.83 px median object maps to $2.96 \times 2.96$ feature cells ($\sim 8.75$ spatial cells). An 8.0 px object maps to $2.00 \times 2.00$ cells ($4.00$ spatial cells). Boundary gradients and shape context remain recoverable.
 - **P3 (stride 8, $H/8 \times W/8$):** The 11.83 px median object maps to $1.48 \times 1.48$ feature cells ($\sim 2.19$ spatial cells). An 8.0 px object maps to exactly $1.00 \times 1.00$ cell. Spatial pooling mixes target pixels with surrounding background texture, causing severe feature blurring.
@@ -97,8 +96,7 @@ Standard YOLO object detection backbones downsample input imagery across success
 
 Because standard YOLO models (such as YOLOv8s) omit P2 and detect from P3, P4, and P5, they allocate 86.54% of AI-TOD-v2 instances to feature levels where the target spans fewer than two feature cells. Integrating a P2 stride-4 detection head is necessary to preserve spatial resolution.
 
-### IoU sensitivity on micro bounding boxes
-
+### IoU Sensitivity on Micro Bounding Boxes & Dynamic Label Assignment
 For two axis-aligned square bounding boxes of side length $S$ with a 1D spatial displacement of $\Delta x$ pixels ($\Delta x \le S$):
 
 $$\text{Intersection} = (S - \Delta x) \times S, \quad \text{Union} = 2S^2 - (S - \Delta x)S = S(S + \Delta x)$$
@@ -121,8 +119,8 @@ Empirical consequences for micro targets versus standard targets:
 
 Because small spatial errors produce massive IoU drops on micro boxes, standard IoU-based label assigners (such as MaxIoUAssigner and TaskAlignedAssigner) assign zero positive anchors to valid micro targets. This motivates dynamic label assignment (STAL in YOLO26) and distribution-based distance metrics such as Normalized Gaussian Wasserstein Distance (NWD), which maintain smooth non-vanishing gradients across non-overlapping micro boxes.
 
-### Data sanitization requirements
-
-The evaluation identified **40 zero-dimension bounding boxes** in `aitodv2_train.json` ($w \le 0$ or $h \le 0$) and **49** in `aitodv2_trainval.json`.
-- Ingestion pipelines converting COCO annotations to YOLO format must drop or clamp boxes where $\min(w, h) < 1.0$ px.
-- Unsanitized zero-dimension boxes produce NaN coordinate normalizations ($w_{norm} = 0 / W_{img}$) and infinite regression loss in CIoU, GIoU, and DFL heads during training.
+### Architectural Decisions Adopted from Findings
+1. **Model Pairing Baseline (YOLOv8s vs. YOLO26s):** AI-TOD-v2 is established as the primary benchmark dataset, pairing standard YOLOv8s against YOLO26s. This pairs conventional detection mechanics against modern advances (STAL dynamic label assignment, NMS-free dual heads) to evaluate true micro-object efficacy versus brute-force tiling. VisDrone2019 is maintained as an auxiliary transfer check.
+2. **Dual-Surface Pipeline Architecture:** Ingestion converts COCO annotations into Ultralytics YOLO format for fast training execution, but during validation all prediction outputs are mapped back into the official AI-TOD COCO evaluator. Standard mAP masks micro-object failure; our dual-surface pipeline provides fine-grained academic metrics ($AP_{vt}, AP_t, AP_s, AP_m, AP_{50}$).
+3. **Stratified Development Subsets:** To avoid the multi-hour latency of 14,000-image full epochs during model iteration, a stratified 10–20% development subset (e.g. 1000 train / 200 val) preserving exact category and micro-scale bin ratios is curated for rapid ablation sweeps.
+4. **Data Sanitization Requirements:** Ingestion pipelines filter and clamp all boxes with $\min(w, h) < 1.0$ px. The audit identified 40 zero-dimension annotations in train and 49 in trainval; dropping them prevents coordinate normalization NaNs and loss divergence in DFL/regression heads.

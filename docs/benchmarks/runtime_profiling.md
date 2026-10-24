@@ -112,13 +112,18 @@
 
 ---
 
-## 3. Recommendations for Team Baseline
+## 3. Recommendations & Architectural Design Decisions
 
-1. **Model Selection:**
+1. **Model Selection & Catalog Registration:**
    - Use `yolov8s.pt` and `yolo26s.pt` as the exact checkpoint strings in YAML configs and CLI invocations.
 2. **Batch & Thread Configuration for CPU / Local Dev:**
-   - Set `workers: 4` and thread count to 8 on the i5-12600K for maximum throughput efficiency without thread thrashing.
+   - Set `workers: 4` and thread count to 8 on the i5-12600K for maximum throughput efficiency without thread contention.
    - For validation sweeps, batch size 8 or 16 maximizes CPU throughput (344 ms/image vs 386 ms/image).
-3. **Inference Strategy:**
-   - Full-frame $800 \times 800$ inference runs at $\sim 4$ FPS on real drone imagery.
-   - SAHI tiling increases inference computation by $\sim 3.5\times$ (due to 4 slices on $800 \times 800$), reducing frame rates to $\sim 0.8$ FPS.
+3. **Inference Strategy & Micro-Scale Trade-off:**
+   - Full-frame $800 \times 800$ inference runs at $\sim 4$ FPS on real drone imagery with low memory footprint (<700 MB).
+   - SAHI tiling increases inference latency by $\sim 3.5\times$ (4 slices on $800 \times 800$, 9 slices on $1280 \times 1280$), reducing frame rates to $\sim 0.8$ FPS.
+4. **Execution Infrastructure (Local CPU vs. Cloud GPU):**
+   - Local workstations are dedicated to data ingestion, EDA, format conversions, unit tests, and lightweight CPU inference.
+   - Resource-intensive model training (full 100-epoch runs for YOLOv8s and YOLO26s baselines and the factorial ablation matrix) is routed to cloud environments with dual NVIDIA T4 GPUs (Kaggle/Colab) and teammate CUDA hardware (RTX 3060). Remote training sweeps will be orchestrated via programmatic Kaggle CLI workflows (`kaggle kernels push`/`status`/`output`).
+5. **Factorial Ablation Matrix Integration:**
+   - The runtime profiling confirms that testing higher input resolutions ($1280 \times 1280$) and integrating high-resolution P2 stride-4 heads will introduce compute overheads that are best absorbed by cloud GPU infrastructure rather than CPU local machines.

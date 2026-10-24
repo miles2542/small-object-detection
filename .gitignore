@@ -25,6 +25,9 @@ mlruns/
 lightning_logs/
 *.log
 
+# Benchmarks
+benchmarks/*.json
+
 # Internal Dev
 AGENTS.md
 CLAUDE.md

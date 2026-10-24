@@ -14,7 +14,7 @@ app = typer.Typer(
     add_completion=False,
 )
 
-data_app = typer.Typer(help="Dataset management, conversion, and validation.")
+data_app = typer.Typer(help="Dataset management, conversion, EDA, and validation.")
 app.add_typer(data_app, name="data")
 
 train_app = typer.Typer(help="Training execution across baselines and ablations.")
@@ -53,10 +53,10 @@ def bench_runtime(
         help="Batch sizes to benchmark (e.g. 1 4 8 16)",
     ),
     output_dir: Path = typer.Option(
-        Path("benchmarks"),
+        Path(".scratch/benchmarks"),
         "--output-dir",
         "-o",
-        help="Directory to save raw benchmark JSON and summary markdown report",
+        help="Directory to save raw benchmark JSON",
     ),
     img_size: int = typer.Option(
         800,
@@ -72,7 +72,7 @@ def bench_runtime(
     ),
 ) -> None:
     """Benchmark inference latency, FPS throughput, VRAM, and gradient backward pass."""
-    from scripts.benchmark_runtime import run_benchmarks
+    from src.bench.runtime import run_benchmarks
 
     models_list = models or ["yolov8s", "yolo26s"]
     batches_list = batch_sizes or [1, 4, 8, 16]
@@ -105,6 +105,80 @@ def data_summary(
     bins = ds_cfg.get("micro_bins", {})
     rows = [[k, f"{v[0]} - {v[1]} px"] for k, v in bins.items()]
     ui.print_table("Micro-scale Bins (AI-TOD)", ["Bin", "Pixel Area Interval"], rows)
+
+
+@data_app.command("download")
+def data_download(
+    dataset: str = typer.Option(
+        "visdrone",
+        "--dataset",
+        help="Dataset to download (visdrone, aitod-v2, all)",
+    ),
+    extract_dir: Path = typer.Option(
+        Path("data"),
+        "--extract-dir",
+        help="Root directory for dataset storage",
+    ),
+    splits: list[str] | None = typer.Option(
+        None,
+        "--splits",
+        help="Splits to download for VisDrone (e.g. val train test-dev)",
+    ),
+    sample_only: bool = typer.Option(
+        False,
+        "--sample-only",
+        help="Extract a small sample set of images for immediate benchmarking",
+    ),
+    sample_count: int = typer.Option(
+        50,
+        "--sample-count",
+        help="Number of sample images to collect when --sample-only is active",
+    ),
+) -> None:
+    """Download and extract benchmark datasets (VisDrone, AI-TOD-v2)."""
+    from src.data.download import download_datasets
+
+    download_datasets(
+        dataset=dataset,
+        extract_dir=extract_dir,
+        splits=splits or ["val"],
+        sample_only=sample_only,
+        sample_count=sample_count,
+    )
+
+
+@data_app.command("eda")
+def data_eda(
+    data_dir: Path = typer.Option(
+        Path("data/ai-tod-v2/annotations"),
+        "--data-dir",
+        help="Path to annotation files directory",
+    ),
+    figures_dir: Path = typer.Option(
+        Path("assets/eda"),
+        "--figures-dir",
+        help="Output directory for diagnostic plots",
+    ),
+    report_path: Path = typer.Option(
+        Path("docs/dataset_analysis.md"),
+        "--report-path",
+        help="Output markdown report file path",
+    ),
+    summary_path: Path = typer.Option(
+        Path(".scratch/eda/aitod_eda_summary.json"),
+        "--summary-path",
+        help="Output JSON summary file path",
+    ),
+) -> None:
+    """Run exploratory data analysis, generate scale diagnostics and report."""
+    from src.data.eda import run_eda
+
+    run_eda(
+        data_dir=data_dir,
+        figures_dir=figures_dir,
+        report_path=report_path,
+        summary_path=summary_path,
+    )
 
 
 @data_app.command("prepare")
