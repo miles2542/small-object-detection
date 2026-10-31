@@ -19,6 +19,7 @@ dependencies = [
     "seaborn>=0.13.2",
     "pandas>=2.3.3",
     "kaggle>=1.7.4.5",
+    "pycocotools>=2.0.11",
 ]
 
 [project.scripts]

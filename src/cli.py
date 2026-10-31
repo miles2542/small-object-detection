@@ -35,6 +35,105 @@ def main_callback() -> None:
     """Entry point for Small Object Detection CLI."""
 
 
+@eval_app.command("run")
+def eval_run(
+    data: Path = typer.Option(
+        ...,
+        "--data",
+        exists=True,
+        dir_okay=False,
+        help="Dataset YAML for weights, or exact COCO JSON for saved predictions",
+    ),
+    weights: Path | None = typer.Option(None, "--weights", exists=True, dir_okay=False),
+    predictions: Path | None = typer.Option(None, "--predictions", exists=True, dir_okay=False),
+    split: str = typer.Option(
+        "val", "--split", help="train, val or test; JSON defines its own image set"
+    ),
+    output_dir: Path = typer.Option(Path("runs/eval/result"), "--output-dir", "-o"),
+    annotations: Path | None = typer.Option(None, "--annotations", exists=True, dir_okay=False),
+    image_root: Path | None = typer.Option(None, "--image-root", exists=True, file_okay=False),
+    protocol: str = typer.Option("assignment", "--protocol", help="assignment or upstream"),
+    smoke: bool = typer.Option(
+        False, "--smoke", help="Explicitly allow pretrained/partial-vocabulary diagnostics"
+    ),
+    device: str = typer.Option("cpu", "--device"),
+    batch_size: int = typer.Option(4, "--batch-size", min=1),
+    confidence: float | None = typer.Option(
+        None,
+        "--confidence",
+        min=0,
+        max=1,
+        help="Operating-point score only; AP ranking stays unchanged",
+    ),
+) -> None:
+    """Evaluate COCO predictions or export and evaluate a native .pt checkpoint."""
+    from src.eval.runner import run_evaluation
+
+    try:
+        metrics = run_evaluation(
+            data,
+            output_dir,
+            weights=weights,
+            predictions=predictions,
+            split=split,
+            annotations=annotations,
+            image_root=image_root,
+            protocol_name=protocol,
+            smoke=smoke,
+            device=device,
+            batch_size=batch_size,
+            confidence=confidence,
+        )
+    except (ValueError, TypeError, KeyError, OSError) as error:
+        ui.print_error(str(error))
+        raise typer.Exit(code=1) from error
+    purpose = metrics["provenance"]["purpose"]
+    ui.print_header(
+        "AI-TOD size-based evaluation",
+        f"{purpose} | {len(metrics['image_ids'])} images | {metrics['protocol']['name']}",
+    )
+    if purpose != "evaluation":
+        ui.print_warning(
+            "SMOKE ONLY - not trained AI-TOD baseline metrics"
+            if purpose == "smoke_only"
+            else "External predictions: training/export provenance is unverified"
+        )
+
+    def percent(value):
+        return "N/A" if value is None else f"{100 * value:.4f}"
+
+    ui.print_table(
+        "AP / AR (%)",
+        ["Area", "GT", "AP", "AP50", "AP75", "AR"],
+        [
+            [
+                label,
+                str(values["support"]),
+                *[percent(values[k]) for k in ["AP", "AP50", "AP75", "AR"]],
+            ]
+            for label, values in metrics["bins"].items()
+        ],
+    )
+    ui.print_table(
+        "Fixed-confidence counts at IoU 0.50",
+        ["Area", "TP", "FP", "FN", "P (%)", "R (%)"],
+        [
+            [
+                label,
+                *[str(values["operating_point"]["micro"][k][0]) for k in ["tp", "fp", "fn"]],
+                *[
+                    percent(values["operating_point"]["micro"][k][0])
+                    for k in ["precision", "recall"]
+                ],
+            ]
+            for label, values in metrics["bins"].items()
+        ],
+    )
+    ui.print_success(
+        f"Results: {output_dir / 'evaluation'} | operating score: {metrics['protocol']['operating_confidence']}"
+    )
+
+
 @bench_app.command("runtime")
 def bench_runtime(
     config: Path = typer.Option(
