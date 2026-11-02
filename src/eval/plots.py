@@ -6,8 +6,10 @@ import json
 from pathlib import Path
 
 
-def plot_input_density(annotations: dict[str, Path], output: Path) -> dict:
+def plot_input_density(annotations: dict[str, Path], output: Path | None = None) -> dict:
     """Measure GT density and an idealized global-cap ceiling, without model predictions."""
+    output = Path(output) if output is not None else Path("runs/eval/input_density.png")
+    output.parent.mkdir(parents=True, exist_ok=True)
     from collections import Counter
 
     import matplotlib
@@ -81,8 +83,10 @@ def plot_input_density(annotations: dict[str, Path], output: Path) -> dict:
     return summary
 
 
-def plot_area_membership(output: Path) -> None:
+def plot_area_membership(output: Path | None = None) -> None:
     """Analytic exact-boundary membership makes overlap and out-of-bin objects explicit."""
+    output = Path(output) if output is not None else Path("runs/eval/area_membership.png")
+    output.parent.mkdir(parents=True, exist_ok=True)
     import matplotlib
 
     matplotlib.use("Agg")
@@ -95,8 +99,8 @@ def plot_area_membership(output: Path) -> None:
     from src.utils.plot_style import add_header, save_figure, set_publication_style
 
     set_publication_style()
-    protocol = evaluation_protocol("assignment")
-    areas = [3.99, 4, 63.99, 64, 64.01, 256, 1024, 4096, 4096.01]
+    protocol = evaluation_protocol()
+    areas = [0, 63.99, 64, 64.01, 256, 1024, 1024.01, 10000]
     matrix = np.array(
         [[int(low <= a <= high) for a in areas] for low, high in protocol["area_ranges"]]
     )
@@ -105,7 +109,7 @@ def plot_area_membership(output: Path) -> None:
     add_header(
         fig,
         "Area-range membership: shared endpoints are intentional",
-        "Analytic examples, not measured frequencies | Assignment profile | 1=included; 0=excluded",
+        "Analytic examples, not measured frequencies | Benchmark profile | 1=included; 0=excluded",
     )
     sns.heatmap(
         matrix,
@@ -128,9 +132,15 @@ def plot_area_membership(output: Path) -> None:
 
 
 def plot_export_diagnostics(
-    runs: dict[str, Path], annotations: Path, output: Path, *, scores: bool = False
+    runs: dict[str, Path],
+    annotations: Path,
+    output: Path | None = None,
+    *,
+    scores: bool = False,
 ) -> dict:
     """Manifest-based coverage or score-retention diagnostics; no TP/FP claims without matching."""
+    output = Path(output) if output is not None else Path("runs/eval/export_diagnostics.png")
+    output.parent.mkdir(parents=True, exist_ok=True)
     import matplotlib
 
     matplotlib.use("Agg")
@@ -258,9 +268,14 @@ def plot_export_diagnostics(
 
 
 def plot_export_preview(
-    annotations: Path, image_root: Path, runs: dict[str, Path], output: Path
+    annotations: Path,
+    image_root: Path,
+    runs: dict[str, Path],
+    output: Path | None = None,
 ) -> None:
     """Show a common image and crop; overlays inspect coordinates, not detection accuracy."""
+    output = Path(output) if output is not None else Path("runs/eval/export_preview.png")
+    output.parent.mkdir(parents=True, exist_ok=True)
     import matplotlib
 
     matplotlib.use("Agg")
@@ -363,8 +378,10 @@ def plot_export_preview(
     save_figure(fig, output)
 
 
-def plot_recall_iou(runs: dict[str, Path], output: Path, category_id: int = 6) -> None:
+def plot_recall_iou(runs: dict[str, Path], output: Path | None = None, category_id: int = 6) -> None:
     """Compare localization-sensitive maximum recall without re-running inference."""
+    output = Path(output) if output is not None else Path("runs/eval/recall_iou.png")
+    output.parent.mkdir(parents=True, exist_ok=True)
     import matplotlib
 
     matplotlib.use("Agg")
@@ -410,8 +427,10 @@ def plot_recall_iou(runs: dict[str, Path], output: Path, category_id: int = 6) -
     save_figure(fig, output)
 
 
-def plot_confidence_tradeoff(diagnostics: Path, output: Path) -> None:
+def plot_confidence_tradeoff(diagnostics: Path, output: Path | None = None) -> None:
     """Plot raw-count operating precision/recall, not interpolated COCO PR values."""
+    output = Path(output) if output is not None else Path("runs/eval/confidence_tradeoff.png")
+    output.parent.mkdir(parents=True, exist_ok=True)
     import matplotlib
 
     matplotlib.use("Agg")
@@ -463,8 +482,10 @@ def plot_confidence_tradeoff(diagnostics: Path, output: Path) -> None:
     save_figure(fig, output)
 
 
-def plot_cli_workflow(output: Path) -> None:
+def plot_cli_workflow(output: Path | None = None) -> None:
     """Show the two CLI entry paths and their shared validation/evaluation surface."""
+    output = Path(output) if output is not None else Path("runs/eval/cli_workflow.png")
+    output.parent.mkdir(parents=True, exist_ok=True)
     import matplotlib
 
     matplotlib.use("Agg")
@@ -569,8 +590,10 @@ def plot_cli_workflow(output: Path) -> None:
     save_figure(fig, output)
 
 
-def plot_class_size_heatmap(runs: dict[str, Path], output: Path) -> None:
+def plot_class_size_heatmap(runs: dict[str, Path], output: Path | None = None) -> None:
     """Show supported zeros separately from absent GT across the complete vocabulary."""
+    output = Path(output) if output is not None else Path("runs/eval/class_size_heatmap.png")
+    output.parent.mkdir(parents=True, exist_ok=True)
     import matplotlib
 
     matplotlib.use("Agg")
@@ -645,14 +668,16 @@ def plot_class_size_heatmap(runs: dict[str, Path], output: Path) -> None:
             ax.add_patch(Rectangle((col, row), 1, 1, facecolor="#E2E8F0", edgecolor="white"))
             ax.text(col + 0.5, row + 0.5, "N/A\nn=0", ha="center", va="center", fontsize=7.5)
         ax.set(title=name)
-        ax.set_xlabel("Assignment size bin", fontweight="bold", fontstyle="italic")
+        ax.set_xlabel("AI-TOD scale bin", fontweight="bold", fontstyle="italic")
         ax.set_ylabel("Category", fontweight="bold", fontstyle="italic")
         ax.tick_params(axis="y", labelrotation=0)
     save_figure(fig, output)
 
 
-def plot_class_coverage(runs: dict[str, Path], output: Path) -> None:
+def plot_class_coverage(runs: dict[str, Path], output: Path | None = None) -> None:
     """Compare GT coverage with raw output counts without implying TP/recall equivalence."""
+    output = Path(output) if output is not None else Path("runs/eval/class_coverage.png")
+    output.parent.mkdir(parents=True, exist_ok=True)
     import matplotlib
 
     matplotlib.use("Agg")
@@ -717,8 +742,12 @@ def plot_class_coverage(runs: dict[str, Path], output: Path) -> None:
     save_figure(fig, output)
 
 
-def plot_precision_recall(runs: dict[str, Path], output: Path, category_id: int = 6) -> None:
+def plot_precision_recall(
+    runs: dict[str, Path], output: Path | None = None, category_id: int = 6
+) -> None:
     """Plot category-specific IoU=.50 interpolated PR; unsupported bins stay explicit."""
+    output = Path(output) if output is not None else Path("runs/eval/precision_recall.png")
+    output.parent.mkdir(parents=True, exist_ok=True)
     import matplotlib
 
     matplotlib.use("Agg")
@@ -776,8 +805,13 @@ def plot_precision_recall(runs: dict[str, Path], output: Path, category_id: int 
     save_figure(fig, output)
 
 
-def plot_analysis_comparison(analysis: dict, output: Path, *, gaps: bool = False) -> None:
+def plot_analysis_comparison(
+    analysis: dict, output: Path | None = None, *, gaps: bool = False
+) -> None:
     """Paired AP or signed reference gaps with support kept beside each size label."""
+    default_name = "size_gaps.png" if gaps else "size_comparison.png"
+    output = Path(output) if output is not None else Path(f"runs/eval/{default_name}")
+    output.parent.mkdir(parents=True, exist_ok=True)
     import matplotlib
 
     matplotlib.use("Agg")
@@ -854,8 +888,12 @@ def plot_analysis_comparison(analysis: dict, output: Path, *, gaps: bool = False
     save_figure(fig, output)
 
 
-def plot_failure_examples(analysis: dict, coco: dict, image_root: Path, output: Path) -> None:
+def plot_failure_examples(
+    analysis: dict, coco: dict, image_root: Path, output: Path | None = None
+) -> None:
     """Original-image context and identical crops for deterministically selected GT misses."""
+    output = Path(output) if output is not None else Path("runs/eval/failure_examples.png")
+    output.parent.mkdir(parents=True, exist_ok=True)
     import matplotlib
 
     matplotlib.use("Agg")

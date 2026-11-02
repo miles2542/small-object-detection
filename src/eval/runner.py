@@ -82,7 +82,6 @@ def run_evaluation(
     split: str = "val",
     annotations: Path | None = None,
     image_root: Path | None = None,
-    protocol_name: str = "assignment",
     smoke: bool = False,
     device: str = "cpu",
     batch_size: int = 4,
@@ -94,7 +93,7 @@ def run_evaluation(
         raise ValueError("Choose exactly one of --weights and --predictions")
     if split not in ["train", "val", "test"]:
         raise ValueError("--split must be train, val or test")
-    protocol = evaluation_protocol(protocol_name)
+    protocol = evaluation_protocol()
     if (
         weights is not None
         and confidence is not None
@@ -126,7 +125,6 @@ def run_evaluation(
             images,
             output_dir / "prediction_export",
             smoke=smoke,
-            protocol_name=protocol_name,
             device=device,
             batch_size=batch_size,
         )
@@ -135,7 +133,6 @@ def run_evaluation(
         source,
         predictions,
         output_dir / "evaluation",
-        protocol_name=protocol_name,
         allow_smoke=smoke,
         confidence=confidence,
     )

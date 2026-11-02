@@ -48,6 +48,7 @@ class EvaluationCliTests(unittest.TestCase):
         help_result = self.invoke("--help")
         self.assertEqual(help_result.exit_code, 0)
         self.assertIn("--weights", help_result.output)
+        self.assertNotIn("--protocol", help_result.output)
         for name in ["first", "second"]:
             output = self.root / name
             result = self.invoke(
@@ -202,6 +203,51 @@ class EvaluationCliTests(unittest.TestCase):
         config.write_text("names: [broken")
         with self.assertRaisesRegex(ValueError, "Invalid dataset YAML"):
             resolve_inputs(config, "val", self.gt, None)
+
+    def test_compare_cli(self):
+        help_result = self.runner.invoke(app, ["eval", "compare", "--help"])
+        self.assertEqual(help_result.exit_code, 0)
+        self.assertIn("--run", help_result.output)
+        self.assertIn("--category-id", help_result.output)
+        self.assertIn("--reference-bin", help_result.output)
+
+        # Create two valid runs
+        r1 = self.root / "r1"
+        r2 = self.root / "r2"
+        self.invoke("--data", self.gt, "--predictions", self.pred, "--output-dir", r1)
+        self.invoke("--data", self.gt, "--predictions", self.pred, "--output-dir", r2)
+
+        cmp_out = self.root / "cmp"
+        with patch("src.eval.plots.plot_analysis_comparison"):
+            res = self.runner.invoke(
+                app,
+                [
+                    "eval",
+                    "compare",
+                    "--run",
+                    f"m1={r1}",
+                    "--run",
+                    f"m2={r2}",
+                    "--output-dir",
+                    str(cmp_out),
+                    "--category-id",
+                    "7",
+                ],
+            )
+        self.assertEqual(res.exit_code, 0, res.output)
+        self.assertIn("Model Comparison Across Scale Bins", res.output)
+        self.assertIn("Class-Controlled Scale Gaps", res.output)
+        self.assertTrue((cmp_out / "analysis.json").exists())
+        self.assertTrue((cmp_out / "comparison.md").exists())
+
+        # Bad formats and single run
+        bad_run = self.runner.invoke(app, ["eval", "compare", "--run", "invalid_format"])
+        self.assertNotEqual(bad_run.exit_code, 0)
+
+        dup_run = self.runner.invoke(
+            app, ["eval", "compare", "--run", f"m1={r1}", "--run", f"m1={r2}"]
+        )
+        self.assertNotEqual(dup_run.exit_code, 0)
 
 
 if __name__ == "__main__":

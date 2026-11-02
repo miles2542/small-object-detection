@@ -160,7 +160,9 @@ def audit_split(root: Path, split: str, coco: dict, selected: list[int]) -> tupl
     }, hashes
 
 
-def plot_audit(summary: dict, output: Path) -> None:
+def plot_audit(summary: dict, output: Path = Path("runs/eval/input_audit/validation_subset_audit.png")) -> None:
+    output = Path(output)
+    output.parent.mkdir(parents=True, exist_ok=True)
     import matplotlib
 
     matplotlib.use("Agg")  # Save-only reporting must not depend on a GUI/Tk installation.
@@ -219,7 +221,7 @@ def main() -> None:
             ["git", "rev-parse", "HEAD"], text=True
         ).strip(),
         "versions": {p: version(p) for p in ["torch", "ultralytics", "numpy", "Pillow"]},
-        "protocols": {name: evaluation_protocol(name) for name in ["assignment", "upstream"]},
+        "protocol": evaluation_protocol(),
         "reference": {"url": REFERENCE_URL, "sha256": REFERENCE_SHA256},
         "code_sha256": {
             name: sha256(Path(name)) for name in ["src/eval/audit.py", "src/eval/protocol.py"]
@@ -260,7 +262,7 @@ def main() -> None:
     ]
     (output / "audit.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     (output / "image_hashes.json").write_text(json.dumps(hashes, indent=2), encoding="utf-8")
-    plot_audit(summary, Path("assets/eval/validation_subset_audit.png"))
+    plot_audit(summary, output / "validation_subset_audit.png")
     print(f"PASS: input audit saved to {output}; train/validation sets are disjoint", flush=True)
 
 

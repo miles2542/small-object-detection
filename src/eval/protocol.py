@@ -15,18 +15,14 @@ REFERENCE_URL = (
 )
 
 
-def evaluation_protocol(name: str = "assignment") -> dict:
+def evaluation_protocol(name: str = "standard") -> dict:
     """Return fresh, JSON-compatible settings; area endpoints follow COCOeval."""
-    ranges = {
-        "assignment": [[0, 1e10], [4, 64], [64, 256], [256, 1024], [1024, 4096]],
-        "upstream": [[0, 1e10], [0, 64], [64, 256], [256, 1024], [1024, 1e10]],
-    }
-    if name not in ranges:
-        raise ValueError(f"Unknown protocol {name!r}; choose assignment or upstream")
+    if name != "standard":
+        raise ValueError(f"Unknown protocol {name!r}; expected 'standard'")
     return {
-        "name": f"aitod-{name}-v1",
+        "name": "aitod-standard-v1",
         "area_labels": ["all", "verytiny", "tiny", "small", "medium"],
-        "area_ranges": ranges[name],
+        "area_ranges": [[0, 1e10], [0, 64], [64, 256], [256, 1024], [1024, 1e10]],
         "iou_thresholds": np.linspace(0.5, 0.95, 10).tolist(),
         "recall_thresholds": np.linspace(0.0, 1.0, 101).tolist(),
         "max_dets": [1, 100, 1500],
@@ -48,9 +44,9 @@ def evaluation_protocol(name: str = "assignment") -> dict:
     }
 
 
-def area_memberships(area: float, name: str = "assignment") -> list[str]:
+def area_memberships(area: float) -> list[str]:
     """Closed intervals deliberately allow shared boundary membership."""
-    protocol = evaluation_protocol(name)
+    protocol = evaluation_protocol()
     return [
         label
         for label, (low, high) in zip(protocol["area_labels"], protocol["area_ranges"])

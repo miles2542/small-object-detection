@@ -171,11 +171,9 @@ class CocoEvaluationTests(unittest.TestCase):
 
     def test_source_area_at_adjacent_float_boundaries(self):
         cases = [
-            (4, [[], ["verytiny"], ["verytiny"]]),
             (64, [["verytiny"], ["verytiny", "tiny"], ["tiny"]]),
             (256, [["tiny"], ["tiny", "small"], ["small"]]),
             (1024, [["small"], ["small", "medium"], ["medium"]]),
-            (4096, [["medium"], ["medium"], []]),
         ]
         for boundary, expected in cases:
             side = math.sqrt(boundary)
@@ -188,6 +186,12 @@ class CocoEvaluationTests(unittest.TestCase):
                 metrics, _ = evaluate_coco(gt, predictions(gt))
                 for label in ["verytiny", "tiny", "small", "medium"]:
                     self.assertEqual(metrics["bins"][label]["support"], int(label in eligible))
+        for area, eligible in [(1, ["verytiny"]), (4096, ["medium"]), (10000, ["medium"])]:
+            gt = fixture([[10, 10, 2, 2]])
+            gt["annotations"][0]["area"] = area
+            metrics, _ = evaluate_coco(gt, predictions(gt))
+            for label in ["verytiny", "tiny", "small", "medium"]:
+                self.assertEqual(metrics["bins"][label]["support"], int(label in eligible))
 
     def test_bad_inputs_and_ignored_flags_fail_clearly(self):
         gt = fixture()

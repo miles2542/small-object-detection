@@ -167,7 +167,6 @@ def evaluate_coco(
     predictions: list,
     *,
     image_ids: list[int] | None = None,
-    protocol_name: str = "assignment",
     confidence: float | None = None,
     max_detections: int | None = None,
 ) -> tuple[dict, COCOeval]:
@@ -178,7 +177,7 @@ def evaluate_coco(
     All returned scores are fractions; unsupported values are None.
     """
     validate_inputs(coco, predictions, image_ids)
-    protocol = evaluation_protocol(protocol_name)
+    protocol = evaluation_protocol()
     if max_detections is not None:
         if type(max_detections) is not int or max_detections < 1:
             raise ValueError("max_detections must be a positive integer")
@@ -259,7 +258,6 @@ def evaluate_files(
     predictions: Path,
     output_dir: Path,
     *,
-    protocol_name: str = "assignment",
     allow_smoke: bool = False,
     confidence: float | None = None,
 ) -> dict:
@@ -290,7 +288,7 @@ def evaluate_files(
                 "Smoke predictions require allow_smoke=True; they are not benchmark results"
             )
         operating = (
-            evaluation_protocol(protocol_name)["operating_confidence"]
+            evaluation_protocol()["operating_confidence"]
             if confidence is None
             else confidence
         )
@@ -304,7 +302,7 @@ def evaluate_files(
         ):
             raise ValueError("Export manifest counts disagree with predictions")
     metrics, evaluator = evaluate_coco(
-        coco, rows, image_ids=selected, protocol_name=protocol_name, confidence=confidence
+        coco, rows, image_ids=selected, confidence=confidence
     )
     metrics["provenance"] = {
         "purpose": manifest["purpose"] if manifest else "external_predictions_unverified",

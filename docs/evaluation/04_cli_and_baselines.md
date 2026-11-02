@@ -33,7 +33,7 @@ Exactly one of **weights** or **predictions** is required. `--split` accepts **t
 
 For the prepared AI-TOD layout, source train/val JSON is inferred from the ancestor `annotations/` directory. Other layouts can pass **`--annotations`** explicitly. YAML mode currently supports a **single split directory**, rather than `.txt` lists or multiple directories. Missing/ambiguous roots, unknown image files, mismatched class vocabularies and malformed YAML are rejected. Saved-JSON mode deliberately uses COCO JSON directly, avoiding reconstruction of GT from YOLO labels or guessed annotations.
 
-Additional options are **`--protocol assignment|upstream`**, **`--smoke`**, **`--output-dir`**, **`--device`**, **`--batch-size`**, and **`--confidence`**. Fresh output directories are required. `--smoke` is an explicit permission to run partial-vocabulary diagnostics, not a conversion into an eight-class benchmark.
+Additional options are **`--smoke`**, **`--output-dir`**, **`--device`**, **`--batch-size`**, and **`--confidence`**. Fresh output directories are required. `--smoke` is an explicit permission to run partial-vocabulary diagnostics, not a conversion into an eight-class benchmark.
 
 **`--confidence` changes only the fixed-confidence operating summaries.** It does not discard predictions used by AP/AR accumulation. A cutoff below a manifest's export floor is rejected, because lower-score detections cannot be recovered from that saved file. In checkpoint mode, this error is checked **before inference**, avoiding a costly run that cannot answer the requested operating-point question.
 

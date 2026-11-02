@@ -78,13 +78,12 @@ def export_predictions(
     image_ids: list[int] | None = None,
     *,
     smoke: bool = False,
-    protocol_name: str = "assignment",
     device: str = "cpu",
     batch_size: int = 4,
 ) -> dict:
     """Export a complete image selection; partial-name pretrained runs are marked smoke-only.
 
-    Use audited original or Phase 1 normalized COCO JSON. Outputs become complete
+    Use audited original or normalized COCO JSON. Outputs become complete
     only when manifest.json exists; failed runs remove their partial predictions.
     """
     import torch
@@ -118,7 +117,7 @@ def export_predictions(
     if model.task != "detect":
         raise ValueError("Only bounding-box detection models are supported")
     mapping = category_mapping(model.names, coco["categories"], smoke)
-    protocol = evaluation_protocol(protocol_name)
+    protocol = evaluation_protocol()
     native_end2end = getattr(model.model.model[-1], "one2one_cv2", None) is not None
     settings = {
         "imgsz": protocol["image_size"],

@@ -147,7 +147,7 @@ def analyze_runs(
     runs: dict[str, Path],
     output_dir: Path,
     *,
-    category_id: int = 6,
+    category_id: int | None = None,
     reference_bin: str = "small",
     image_root: Path | None = None,
 ) -> dict:
@@ -157,9 +157,10 @@ def analyze_runs(
     output_dir = Path(output_dir)
     if output_dir.exists() and any(output_dir.iterdir()):
         raise FileExistsError("Use a fresh analysis output directory")
+    effective_category_id = category_id
     result = {
         "status": "diagnostic_only",
-        "category_id": category_id,
+        "category_id": effective_category_id,
         "reference_bin": reference_bin,
         "models": {},
         "examples": [],
@@ -196,17 +197,23 @@ def analyze_runs(
         common = signature
         coco = json.loads(annotations.read_text(encoding="utf-8"))
         rows = json.loads(predictions.read_text(encoding="utf-8"))
-        protocol_name = "upstream" if "upstream" in metrics["protocol"]["name"] else "assignment"
         check, evaluator = evaluate_coco(
             coco,
             rows,
             image_ids=metrics["image_ids"],
-            protocol_name=protocol_name,
             confidence=metrics["protocol"]["operating_confidence"],
         )
         if any(check[key] != metrics[key] for key in ["bins", "per_class"]):
             raise ValueError("Saved metrics do not reproduce from their recorded inputs")
-        category = metrics["per_class"][str(category_id)]
+        if effective_category_id is None:
+            if "1" in metrics["per_class"]:
+                effective_category_id = 1
+            elif "6" in metrics["per_class"]:
+                effective_category_id = 6
+            else:
+                effective_category_id = int(next(iter(metrics["per_class"])))
+            result["category_id"] = effective_category_id
+        category = metrics["per_class"][str(effective_category_id)]
         reference = category["bins"][reference_bin]["AP"]
         manifest = provenance.get("export_manifest")
         if manifest:
@@ -235,10 +242,10 @@ def analyze_runs(
         ]
         sweep = []
         for score in thresholds:
-            counts = operating_counts(evaluator, 0, score)["per_class"][str(category_id)]
+            counts = operating_counts(evaluator, 0, score)["per_class"][str(effective_category_id)]
             sweep.append({"score": score, **{key: value[0] for key, value in counts.items()}})
         confidence = metrics["protocol"]["operating_confidence"]
-        all_candidates[name] = failure_candidates(evaluator, category_id, confidence)
+        all_candidates[name] = failure_candidates(evaluator, effective_category_id, confidence)
         result["models"][name] = {
             "run": path.as_posix(),
             "metrics_sha256": sha256(metrics_path),
@@ -302,7 +309,7 @@ def main() -> None:
     )
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--image-root", type=Path)
-    parser.add_argument("--category-id", type=int, default=6)
+    parser.add_argument("--category-id", type=int, default=1)
     parser.add_argument("--reference-bin", choices=SIZE_BINS, default="small")
     args = parser.parse_args()
     try:

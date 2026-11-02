@@ -65,7 +65,7 @@ class EvaluationAnalysisTests(unittest.TestCase):
         # Same image count is insufficient: the exact protocol must agree.
         path = runs["two"] / "evaluation/metrics.json"
         metrics = json.loads(path.read_text())
-        metrics["protocol"]["area_ranges"][1] = [0, 64]
+        metrics["protocol"]["area_ranges"][1] = [0, 50]
         path.write_text(json.dumps(metrics))
         with self.assertRaisesRegex(ValueError, "identical"):
             analyze_runs(runs, self.root / "bad_protocol")

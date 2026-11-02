@@ -17,18 +17,19 @@ class EvaluationProtocolTests(unittest.TestCase):
             self.assertEqual(area_memberships(boundary), ["all", left, right])
             self.assertEqual(area_memberships(math.nextafter(boundary, -math.inf)), ["all", left])
             self.assertEqual(area_memberships(math.nextafter(boundary, math.inf)), ["all", right])
-        self.assertEqual(area_memberships(4), ["all", "verytiny"])
-        self.assertEqual(area_memberships(math.nextafter(4, -math.inf)), ["all"])
-        self.assertEqual(area_memberships(4096), ["all", "medium"])
-        self.assertEqual(area_memberships(math.nextafter(4096, math.inf)), ["all"])
-        self.assertEqual(area_memberships(1, "upstream"), ["all", "verytiny"])
-        self.assertEqual(area_memberships(10000, "upstream"), ["all", "medium"])
+        self.assertEqual(area_memberships(0), ["all", "verytiny"])
+        self.assertEqual(area_memberships(1), ["all", "verytiny"])
+        self.assertEqual(area_memberships(10000), ["all", "medium"])
         self.assertEqual(area_memberships(float("nan")), [])
 
     def test_protocol_is_fresh_and_rejects_unknown_name(self):
         first = evaluation_protocol()
         first["max_dets"].append(9999)
         self.assertEqual(evaluation_protocol()["max_dets"], [1, 100, 1500])
+        self.assertEqual(
+            evaluation_protocol()["area_ranges"],
+            [[0, 1e10], [0, 64], [64, 256], [256, 1024], [1024, 1e10]],
+        )
         with self.assertRaises(ValueError):
             evaluation_protocol("unknown")
 
