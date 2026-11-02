@@ -1,150 +1,237 @@
-# Evaluation integration and team handoff
+# AI-TOD Micro-Scale Evaluation Harness and Benchmark Integration Guide
 
-**Integration branch:** [`feat/m2-evaluation-coco`](https://github.com/miles2542/small-object-detection/tree/feat/m2-evaluation-coco).
+This guide defines the standardized evaluation protocol, input contracts, CLI tooling, and verification parity for micro-scale object detection on the AI-TOD-v2 benchmark.
 
-**Start here when evaluating a baseline, P2 model, SAHI output or NWD ablation.** This folder documents the shared measurement contract, verified implementation and evidence limits. Read the [benchmark status](../evaluation_baselines.md) before quoting any score.
+---
 
-## 1. What is ready, and what remains open
+## 1. Overview & Motivation
 
-| Surface | Current state | What a teammate can do now |
-| :--- | :--- | :--- |
-| Dataset/input audit and original-ID adapter | **Implemented and verified** | Reuse exact GT and selected image IDs |
-| Native `.pt` prediction export | **Implemented and verified** | Export trained checkpoints; preserve complete image coverage and metadata |
-| Micro-scale COCO evaluator | **Implemented and verified** | Evaluate original-ID JSON with assignment or explicit upstream ranges |
-| `sod eval run` | **Implemented and verified** | Run checkpoint inference or reuse saved JSON |
-| Comparison/gap/failure-example analysis | **Implemented and verified** | Compare two compatible completed runs without repeating inference |
-| Published numerical examples | **Pretrained smoke diagnostics only** | Understand interfaces and trends; do not quote them as trained baselines |
-| Genuine trained full-validation benchmark | **Pending checkpoint/training-provenance handoff** | Run the documented commands once real artifacts exist |
+AI-TOD-v2 poses unique challenges for standard object detection pipelines due to extreme target sparsity and scale concentration:
+- **Micro-Scale Target Dominance:** The dataset contains 376,625 annotations across 14,018 aerial images ($800 \times 800$ resolution). Across the trainval splits, the median object scale $\sqrt{w \times h}$ is **11.83 px** (mean: **12.67 px**), with **86.54%** of all targets measuring $\le 16$ px.
+- **Limitation of Standard COCO Metrics:** Standard MS COCO evaluation categorizes all objects smaller than $32 \times 32$ px into a single $AP_s$ bin ($32^2 = 1024$ px$^2$). In AI-TOD-v2, **98.20%** of all instances fall below 32 px. Standard COCO metrics lump distinct microscopic regimes together, obscuring severe localization degradation and feature map stride collapse (where targets become sub-pixel at $P_3$, $P_4$, and $P_5$ feature levels).
+- **Dedicated Micro-Scale Partition:** To isolate detection performance across fine-grained sub-pixel regimes, this harness partitions bounding boxes into four canonical scale bins: Very Tiny ($AP_{vt}$), Tiny ($AP_t$), Small ($AP_s$), and Medium ($AP_m$).
 
-**25 test methods pass**; repository-source Ruff checks pass. The evaluator's complete precision/recall/score tensors matched a pinned AI-TOD reference on the tested fixtures and saved smoke inputs; details and limits are in Phase 3. Successful integration does not certify a new checkpoint's training quality or an untested environment.
+---
 
-### Role note, especially for Member 3
+## 2. Evaluation Protocol & Scale Intervals
 
-The repository [team quickstart](../team_quickstart.md) assigns **Member 3 to P2 architecture** and **Member 4 to SAHI**; the assignment materials associate Member 3 with inference and differ in later numbering. Use the team's agreed responsibility rather than relying only on member numbers. This guide supplies both handoffs:
+### Canonical Scale Intervals
 
-- **P2/architecture owner, including Member 3 under the quickstart:** use the checkpoint path in Section 3, keeping the original evaluation data/protocol and eight class names.
-- **Inference/SAHI owner, including Member 3 under the assignment:** use the original-coordinate COCO contract and saved-JSON path in Section 4; document tile merging and preserve empty-image coverage.
+Evaluation bins are defined on original pixel bounding box area $A = w \times h$ (in pixels$^2$), corresponding to characteristic side length $S = \sqrt{A}$:
 
-Phase reports preserve their original completion checkpoints; the status table above and benchmark status page describe the current state. Later figure/analysis revisions are identified inside the reports.
+| Scale Bin | Area Range ($A$ px$^2$) | Scale Range ($S$ px) | AI-TOD Context |
+| :--- | :--- | :--- | :--- |
+| **$AP_{vt}$ (Very Tiny)** | $[0, 64]$ | $[0, 8]$ px | Sub-pixel at stride 8 ($P_3$); spans $\le 2 \times 2$ cells at stride 4 ($P_2$) |
+| **$AP_t$ (Tiny)** | $[64, 256]$ | $[8, 16]$ px | Typical micro target (median 11.83 px); collapses at stride 16 ($P_4$) |
+| **$AP_s$ (Small)** | $[256, 1024]$ | $[16, 32]$ px | Upper quartile of aerial targets |
+| **$AP_m$ (Medium)** | $[1024, 10^{10}]$ | $\ge 32$ px | Extended structures (bridges, swimming pools, large facilities) |
+| **$AP$ (All)** | $[0, 10^{10}]$ | All scales | Overall benchmark mean Average Precision |
 
-## 2. Read only what your next task needs
-
-| Report | Verified contribution | Must-know finding / integration use |
-| :--- | :--- | :--- |
-| [00 - Preparation](00_preparation.md) | Environment and real data layout | Data, weights and run outputs are intentionally ignored by Git |
-| [01 - Protocol and inputs](01_protocol_and_inputs.md) | Source hashes, GT sanitation, subset drift; **three figures** | Full validation is 2,804 images / **75,082 eligible GT**; closed bins overlap; dense-scene caps matter |
-| [02 - Prediction export](02_prediction_export.md) | Class/coordinate/coverage adapter; **three figures** | Original IDs; zero outputs; active native-head cap; score-distribution and mode sensitivity |
-| [03 - Evaluator validation](03_evaluator_validation.md) | Matching, AP/AR/PR, operating counts, reference parity | Interpolated PR is not fixed-confidence precision; unsupported slices are N/A |
-| [04 - CLI integration](04_cli_and_baselines.md) | Executed checkpoint/JSON modes, numerical equivalence | Correct YAML selection versus explicit JSON selection; smoke vocabulary is incomplete |
-| [05 - Analysis and handoff](05_analysis_and_handoff.md) | Signed gaps, support-aware comparisons, deterministic error examples | Reference/support matter; illustrative failures are not causal/TIDE attribution |
-
-Also see the [working plan](../member2_working_plan.md), [portable numerical/status handoff](../evaluation_baselines.md), and [team environment/data guide](../team_quickstart.md).
-
-## 3. Checkpoint route: P2, NWD and trained baselines
-
-After checkout, synchronize the environment with **`uv sync --locked`**, activate `.venv`, and prepare real imagery using the team quickstart. For full-size preparation, `--train-size 0 --val-size 0` selects full splits. Use **`--no-placeholders`** to fail on missing imagery rather than create synthetic files. Confirm the actual source images exist before evaluating.
-
-```powershell
-# Inspect the command; Windows can also use .\sod.cmd without activation.
-sod eval run --help
-
-# Development integration check with a genuine eight-class trained checkpoint.
-# Replace PATH_TO_P2_BEST.pt with an actual existing local file.
-sod eval run --weights PATH_TO_P2_BEST.pt --data configs/aitod_mini.yaml --split val --output-dir runs/eval/p2_mini
-
-# Final comparable validation, once the trained artifacts are available.
-sod eval run --weights PATH_TO_BASELINE_BEST.pt --data configs/aitod_full.yaml --split val --output-dir runs/eval/baseline_full
-sod eval run --weights PATH_TO_P2_BEST.pt --data configs/aitod_full.yaml --split val --output-dir runs/eval/p2_full
-
-# Reuse both completed runs; no new model inference.
-python -m src.eval.analysis --run Baseline=runs/eval/baseline_full --run P2=runs/eval/p2_full --output-dir runs/eval/p2_comparison --image-root data/ai-tod-v2/splits/full/images/val
+```
+Scale:    0 px         8 px         16 px        32 px               inf
+Area:     0 px²        64 px²       256 px²      1024 px²            1e10 px²
+Interval: [---- AP_vt ----]
+                       [----- AP_t -----]
+                                     [----- AP_s -----]
+                                                  [-------- AP_m --------]
 ```
 
-Choose **fresh output directories**. Add `--device 0` for an available compatible CUDA environment; use `--device cpu --batch-size 4` for local smoke/development work. Device changes need documenting; this guide's CPU runs do not establish standardized latency comparisons.
+### Closed Boundary Handling
 
-**P2/NWD owner:** provide the actual `.pt`, SHA-256, exact class names/order and training config/logs: train selection, epochs, seed and changed architecture/loss. The exporter maps model indices by **exact class names**, so an index reorder is acceptable only with correct unique names. Missing/unknown names fail in ordinary evaluation. A new head still needs active-backend/native-cap verification; a modified model must produce compatible detection `Results` rather than silently changing output semantics. Feature-cell size is motivation for P2, not proof that a layer has zero activation or that AP must improve.
+Following official COCO evaluation conventions, range intervals are **closed on both boundaries** ($low \le A \le high$):
+- Bounding boxes falling exactly on a scale partition threshold (e.g., $A = 64$ px$^2$, corresponding to an $8 \times 8$ px box) are members of **both** adjacent scale bins ($AP_{vt}$ and $AP_t$).
+- Because adjacent closed intervals share boundary instances, support counts across size groups cannot be summed as mutually disjoint counts.
+- Category AP within a bin is averaged across supported categories; overall $AP$ is not an arithmetic average of the four size-bin APs.
 
-YAML mode supports a **single image directory per split**, not lists or `.txt` split files. It uses actual filenames to select source COCO IDs; unknown files, ambiguous roots and class-name disagreements fail. Standard prepared train/val annotations are inferred. Other layouts use `--annotations COCO_JSON`; explicit COCO input with weights additionally needs `--image-root`. JSON image records define the image set: a `--split val` label cannot convert a training JSON to validation data.
+![Area boundary membership](../../assets/eval/area_boundary_membership.png)
+*Figure 1: Closed boundary evaluation model showing interval overlaps at boundary transition points.*
 
-## 4. Inference/SAHI route: exact COCO and coverage contract
+### Detection Caps and Dense Scenes
 
-For custom inference, supply a COCO results array:
+- **Evaluator Caps:** Maximum detections evaluated per image/category are evaluated at thresholds `[1, 100, 1500]`.
+- **High-Density Scene Handling:** AI-TOD-v2 scenes feature up to 815 annotations per validation image (and 1,729 in training splits). A restrictive cap (e.g. standard COCO 100 or 300) truncates valid true positives in clustered vehicular or port environments.
+- **Export Limit:** Prediction exporters retain up to **1,500 detections globally per image** at a low confidence floor ($\ge 0.001$) to prevent premature recall truncation prior to COCO accumulation.
+
+### Ground-Truth Sanitization Rules
+
+Raw source annotation JSON files undergo non-mutating adaptation before evaluation:
+1. **Zero-Dimension / Non-Positive Box Removal:** Annotations where $w \le 0$, $h \le 0$, or $A \le 0$ are excluded. The audit identified 40 degenerate instances in `aitodv2_train.json` and 9 in `aitod_val.json` (75,082 eligible annotations retained out of 75,091 total).
+2. **Unclipped Positive Geometry Preservation:** Ground-truth boxes extending slightly beyond image borders (e.g., up to 44 px outside the $800 \times 800$ frame) are preserved with their original positive geometry and annotated areas. Silently clipping boxes alters the official benchmark surface.
+3. **Annotation ID Reassignment ($1 \dots N$):** Raw AI-TOD annotations contain an entry with ID 0. COCOeval uses `0` as the unmatched sentinel inside `dtMatches`. All annotations are assigned 1-based positive IDs ($1 \dots N$), while preserving the raw ID in `source_annotation_id` for deterministic error tracing.
+4. **Original Image and Category IDs:** Image IDs (including 0) and dataset category IDs ($0 \dots 7$) are preserved verbatim.
+
+---
+
+## 3. CLI Usage & Workflow
+
+The evaluation CLI is accessible via `sod eval` (or `python -m src.cli eval`).
+
+![CLI evaluation workflow](../../assets/eval/cli_evaluation_workflow.png)
+*Figure 2: End-to-end evaluation and cross-model comparison pipeline.*
+
+### Evaluating Checkpoints (`sod eval run --weights`)
+
+Evaluates a native `.pt` model checkpoint directly against a dataset split defined in a dataset configuration YAML:
+
+```powershell
+# Evaluate trained checkpoint on full AI-TOD-v2 validation split (CUDA)
+sod eval run `
+  --weights runs/train/yolov8s_aitod/weights/best.pt `
+  --data configs/aitod_full.yaml `
+  --split val `
+  --output-dir runs/eval/yolov8s_full `
+  --device 0
+
+# Development sanity check on mini split with specific batch size
+sod eval run `
+  --weights runs/train/yolo26s_mini/weights/best.pt `
+  --data configs/aitod_mini.yaml `
+  --split val `
+  --output-dir runs/eval/yolo26s_mini `
+  --device cpu `
+  --batch-size 4
+```
+
+### Evaluating Saved Predictions (`sod eval run --predictions`)
+
+Evaluates pre-exported COCO prediction JSON against ground-truth annotations without requiring GPU resources, model checkpoints, or local imagery:
+
+```powershell
+sod eval run `
+  --data runs/eval/input_audit/val_ground_truth.json `
+  --predictions runs/infer/sahi/predictions.json `
+  --split val `
+  --output-dir runs/eval/sahi_full
+```
+
+### Comparing Two Runs (`sod eval compare`)
+
+Computes statistical comparisons, class-controlled scale gaps, and metric deltas between two completed evaluation runs without repeating inference:
+
+```powershell
+sod eval compare `
+  --run Baseline=runs/eval/yolov8s_full `
+  --run Experiment=runs/eval/yolo26s_full `
+  --reference-bin small `
+  --category-id 6 `
+  --output-dir runs/eval/comparison_v8_vs_26 `
+  --image-root data/ai-tod-v2/splits/full/images/val
+```
+
+### CLI Options Reference
+
+| Flag | Type | Description |
+| :--- | :--- | :--- |
+| `--data` | `Path` (Required) | Dataset YAML configuration (checkpoint mode) or COCO ground-truth JSON (predictions mode) |
+| `--weights` | `Path` | Path to native PyTorch `.pt` model checkpoint |
+| `--predictions` | `Path` | Path to external COCO predictions JSON file |
+| `--split` | `str` | Dataset split: `val` (default), `train`, or `test` |
+| `--output-dir`, `-o` | `Path` | Destination directory for evaluation metrics and PR curves (defaults to `runs/eval/result`) |
+| `--annotations` | `Path` | Explicit path to source COCO annotations JSON (overrides default auto-discovery) |
+| `--image-root` | `Path` | Root directory of evaluation images (required when using `--weights` with explicit COCO JSON) |
+| `--confidence` | `float` | Operating-point confidence threshold (default: 0.25). Modifies operating TP/FP/FN counts; leaves ranked AP unchanged |
+| `--device` | `str` | Computation device: `0` (CUDA GPU) or `cpu` (default: `cpu`) |
+| `--batch-size` | `int` | Inference batch size (default: 4) |
+| `--smoke` | `Flag` | Permits partial-vocabulary diagnostic runs (e.g. shared classes only); tags output as `smoke_only` |
+
+---
+
+## 4. Downstream Integration Contracts
+
+Collaborators across functional tracks (baseline training, high-resolution / SAHI inference, architecture ablation) must adhere to the following schemas and data contracts.
+
+### Prediction JSON Schema
+
+External prediction files must serialize as a single top-level JSON array of detection objects:
 
 ```json
-[{"image_id": 91, "category_id": 17, "bbox": [64.0, 32.0, 128.0, 64.0], "score": 0.75}]
+[
+  {
+    "image_id": 91,
+    "category_id": 6,
+    "bbox": [64.0, 32.0, 128.0, 64.0],
+    "score": 0.7524
+  }
+]
 ```
 
-This is an **analytic schema example**, not an AI-TOD measurement. Actual AI-TOD IDs must come from its own annotation file.
-
-| Field / condition | Required meaning | Typical integration error |
+| Field | Type | Specification & Invariants |
 | :--- | :--- | :--- |
-| `image_id` | Original integer COCO image ID from the exact split | Numeric filename stem, tile ID, enumeration index or train/val ID mix-up |
-| `category_id` | Original integer COCO category ID via exact class-name mapping | Model class index copied directly, guessed boat/ship or car/vehicle aliases |
-| `bbox` | `[x,y,width,height]`, original-image pixel coordinates, positive dimensions | XYXY/normalized values, tile-local coordinates, repeated resize inversion |
-| `score` | Finite probability-like confidence in [0,1], preserve ranking precision | Rounded scores, NaN, or a high display cutoff applied before AP export |
-| Image coverage | Exact GT image list, including negative/zero-prediction images | Building the evaluated set from nonempty predictions |
-| All-empty run | A valid JSON array `[]`, with the complete GT image set | Missing/truncated file confused with valid emptiness |
+| `image_id` | `int` | Exact integer ID of the image from the evaluation ground-truth split. Do not use filenames or sequential loop counters. |
+| `category_id` | `int` | Integer category ID in AI-TOD-v2 ($0\dots7$): `0: airplane`, `1: bridge`, `2: storage-tank`, `3: ship`, `4: swimming-pool`, `5: vehicle`, `6: person`, `7: wind-mill`. |
+| `bbox` | `list[float]` | `[x_min, y_min, width, height]` in **original full-image pixel coordinates**. Width and height must be strictly positive. |
+| `score` | `float` | Detection confidence in $[0.0, 1.0]$. Retain full floating-point precision; do not truncate with high display thresholds. |
 
-**SAHI sequence:** predict tiles → reverse tile resize/padding → add tile offsets into original image coordinates → merge duplicates across overlap → export original image/category IDs. If the installed library already restores original coordinates, do not apply the transform again. State tile dimensions, overlap, per-tile floor/cap, merging algorithm/threshold, and final full-image floor/cap. A high per-tile cap cannot repair an earlier low top-k cutoff, and a high final cap cannot restore discarded tile outputs.
+### Downstream Track Guidelines
 
-```powershell
-# Evaluate external merged JSON against the exact selected normalized COCO GT.
-sod eval run --data runs/eval/input_audit/val_ground_truth.json --predictions runs/infer/sahi/predictions.json --split val --output-dir runs/eval/sahi_full
+#### 1. Baseline Training Track
+- Ensure all 8 target classes are configured in training YAMLs (`names` list matching the exact dataset mapping).
+- Keep inference resolution at $800 \times 800$ (`--img-size 800`).
+- Ensure the exported model checkpoint contains valid detection heads compatible with Ultralytics inference.
+
+#### 2. High-Resolution & SAHI Inference Track
+- **Tile Coordinate Un-tiling:** When running sliced inference over overlapping patches, bounding box coordinates must be mapped back to original image space ($x = x_{tile} + x_{offset}, y = y_{tile} + y_{offset}$) before export.
+- **Overlap Non-Maximum Suppression:** Run cross-tile NMS (e.g., standard IoU 0.60–0.70) to suppress duplicate predictions generated in slice overlap regions.
+- **Full Image Coverage:** Negative images (images with 0 detections) must remain in the evaluation set. If no detections are made across an entire run, write an empty JSON array `[]`.
+
+#### 3. Architecture Ablation Track (P2 Heads, NWD, Dynamic Assignment)
+- **Active Backend Verification:** When deploying end-to-end NMS-free models (e.g. YOLO26), ensure the active backend disables post-hoc NMS (`nms=False`) and maintains the internal maximum detections cap at 1500.
+- **Exact Class Mapping:** Map class indices to COCO category IDs using canonical category strings rather than assuming identity index mappings.
+
+### Generated Evaluation Artifacts
+
+Every completed evaluation run writes the following standardized directory structure to `--output-dir`:
+
+```
+runs/eval/<run_name>/
+├── run.json               # Run metadata, git revision, timestamps, parameters, SHA-256 provenance
+├── manifest.json          # Image-level detection counts, cap hits, and file hashes
+└── evaluation/
+    ├── metrics.json       # AP/AR summaries, scale bin metrics, per-class metrics, operating counts
+    └── curves.npz         # Full precision/recall/score arrays across all IoUs, classes, and areas
 ```
 
-The example GT is created by **`python -m src.eval.audit`** after full data preparation. That command performs a real image/hash audit and writes normalized full/mini GT; it is not a fast plotting-only command. Pass your actual equivalent exact normalized GT if using a different workspace layout.
+---
 
-**Manifest behavior:** exporter-produced results have a sibling `manifest.json`; it must be complete and its hashes/counts/image coverage must agree. Preserve it alongside the exact annotation JSON. A partial or mismatched manifest is rejected. Plain external JSON is accepted without a manifest but labeled **`external_predictions_unverified`**; this is not a completed provenance handoff. Do not fabricate a "complete" manifest to suppress that label. To reuse native exporter manifests, call the existing `src.eval.export.export_predictions`; for a custom sliced pipeline, document equivalent source IDs, all-image coverage, settings, counts, weights/training provenance and SHA-256 evidence for review.
+## 5. Evaluator Validation & Reference Parity
 
-The analyzer compares **two completed CLI run directories**, not raw prediction files. It rejects different annotation hashes, image/category IDs or evaluation protocols; available export settings/vocabularies must also agree. An inference experiment that intentionally changes resolution or postprocessing needs its own clearly documented controlled comparison. The current automatic analyzer's strict setting guard must not be bypassed by editing manifests. External/unverified inputs remain visibly unverified, and unknown export floors do not receive an assumed low-score sweep.
+The evaluation harness wraps `pycocotools.cocoeval.COCOeval` to perform exact greedy matching and PR curve interpolation, avoiding non-standard matcher discrepancies.
 
-## 5. Frozen measurement contract and must-know cautions
+### Pinned AI-TOD Reference Parity
 
-| Topic | Contract / caution |
-| :--- | :--- |
-| Default protocol | **`assignment`**: area all `[0,1e10]`; vt `[4,64]`, t `[64,256]`, s `[256,1024]`, m `[1024,4096]` px² |
-| Alternative | **`upstream`** changes vt lower bound to 0 and medium upper bound to 1e10; label separately, never mix the two profiles |
-| Scale | $\sqrt{w h}$ in original pixels; not maximum side, feature-map cells or resized input coordinates |
-| Boundaries | Closed on both ends; shared endpoint GT belongs to both adjacent micro groups. Do not sum their support or average their AP to get overall AP |
-| GT sanitation | Copy only; remove nonpositive geometry/area, assign positive annotation IDs and preserve source IDs. Keep original positive coordinates/area, including out-of-frame GT |
-| Annotation ID zero | Reassigned because COCO matching uses zero as the unmatched sentinel. **Image/category ID zero remains valid** |
-| Confidence | Export floor **.001**; fixed operating summary **.25**. `--confidence` changes operating summaries, not the AP ranking. Below a recorded export floor is rejected |
-| Caps | Export **1,500 globally/image**; evaluator `[1,100,1500]` **per image/category**. Check active native top-k and cap hits, not only a passed CLI option |
-| Model backend | V8 class-aware NMS IoU .70; YOLO26 native end-to-end selected/verified explicitly. Mode diagnostic outputs are not intended native baselines |
-| AP/AR | AP averages eligible categories/IoUs/recall samples; AR is maximum-recall based. Neither is pooled thresholded operating recall |
-| PR and operating points | COCO PR is interpolated; fixed-score TP/FP/FN come from actual evaluator matches/ignore flags |
-| Missing support | JSON `null` / console N/A; supported zero AP stays zero. Empty predictions do not make GT support disappear |
-| Macro precision | Supported class with no predictions is defined as zero for macro aggregation; unsupported classes excluded. A pooled zero denominator remains N/A |
-| Smoke mode | Explicit `--smoke` allows shared-class pretrained diagnostics. Current outputs have person/airplane only; they are **not eight-class baselines** |
-| Evidence limit | No trained final scores, architectural causation, threshold recommendation or deployment suitability is established by the smoke reports |
+The implementation was validated against official reference implementation [`cocoapi-aitod` (commit `44a230ae5197cb89bf9e5e62f313cac3ad30c7af`)](https://github.com/jwwangchn/cocoapi-aitod/blob/44a230ae5197cb89bf9e5e62f313cac3ad30c7af/aitodpycocotools/aitodpycocotools/cocoeval.py), SHA-256 `2c3f84612f448dccf085c72f20711f5fb8dcac3022e8f24cdf04af283a24fa1e`.
 
-**Current data caveat:** downloaded v2 validation has **75,091 raw annotations**, nine invalid, hence **75,082 eligible**. The older EDA count of 70,424 describes a different surface. Match source hashes, not filenames alone. Mini validation has **200 images / 5,054 GT** and measurable class drift; full and mini metrics are not interchangeable. Byte-hash disjointness does not prove geographic independence.
+Across test suites spanning perfect predictions, empty outputs, class confusions, crowd annotations, and boundary conditions, the numerical parity is exact:
 
-## 6. What to send to the next owner
+| Output Tensor | Dimension / Shape | Maximum Absolute Difference vs Reference |
+| :--- | :--- | :--- |
+| Precision Tensor | `[10, 101, 8, 5, 3]` (IoU $\times$ Recall $\times$ Class $\times$ Area $\times$ Cap) | **`0.000000000000`** |
+| Recall Tensor | `[10, 8, 5, 3]` (IoU $\times$ Class $\times$ Area $\times$ Cap) | **`0.000000000000`** |
+| Score Tensor | `[10, 101, 8, 5, 3]` | **`0.000000000000`** |
 
-| Artifact | Required contents / interpretation |
-| :--- | :--- |
-| Model/training evidence | Checkpoint SHA-256, training split/config/epochs/seed/logs and class names; genuine baseline identity |
-| Exact GT + selection | Original source identity, selected image IDs including empty outputs; normalized GT actually evaluated |
-| Predictions + export evidence | Original-coordinate COCO JSON, complete manifest when produced by the adapter, hashes, mapping, mode and all inference/merge/filter settings |
-| CLI run directory | `run.json` plus `evaluation/metrics.json` and `evaluation/curves.npz`; retain full precision |
-| Analysis directory | `analysis.json`, generated `comparison.md`, AP/gap PNGs and optional original-image/crop failure figure |
-| Interpretation | Split/profile/support/units, explicit reference bin, percentage-point versus relative loss, caps, scope and unresolved limitations |
+### Operating Points & Confusion Summaries
 
-`metrics.json` stores fractions; console/generated tables display percent. `curves.npz` precision axes are `[IoU, recall, category, area, cap]`, recall axes `[IoU, category, area, cap]`, with named axis arrays. Unsupported tensor entries are `-1`, not measured zero. Relative AP loss is undefined for a zero/missing reference; negative signed gaps indicate improvements. The default analysis reference **person-small (30 mini GT)** is exploratory; medium has only one mini person GT and is not a stable general reference.
+In addition to rank-based AP/AR metrics, the evaluator computes concrete operating summaries at score threshold $0.25$ and IoU $0.50$:
+- **True Positives ($TP$):** Retained, matched, non-ignored detections.
+- **False Positives ($FP$):** Retained, unmatched, non-ignored detections.
+- **False Negatives ($FN$):** Unmatched eligible ground-truth annotations ($N_{GT} - TP$).
+- **Micro Precision & Recall:** Computed over pooled TP, FP, and FN across images and categories.
+- **Handling of Unrepresented Slices:** Categories or scale bins with no ground-truth support are emitted as explicit Python `None` / JSON `null` (rendered as `N/A`), avoiding misleading zero entries.
 
-The new Phase 2 coverage figure shows **21/42 GT** on v8/native zero-output images; most are smoke-excluded classes. Do not confuse "no output" with "no GT", or interpret every excluded-class miss as person/airplane recognition failure. Likewise, native has fewer boxes at .001 but more at .25 than v8: raw volume or confidence alone cannot rank AP.
+---
 
-Large inputs, pretrained weights, `runs/`, audit hashes and JSON/tensor outputs are **not included in Git**. A fresh clone supplies the code, tests, durable reports and report PNGs. Recreate the environment/data and transfer verified run artifacts separately, rather than expecting local ignored examples to exist after checkout. Do not put API tokens in code, commits or reports.
+## 6. Data Integrity & Leakage Audit
 
-## 7. Verification before quoting a new result
+To guarantee benchmark validity, dataset splits and annotation files can be audited using:
 
 ```powershell
-python -m unittest discover -s tests -q
-# Repository CI checks source lint with Ruff.
-uvx ruff check src
+python -m src.eval.audit
 ```
 
-Check the reported model/split/profile, exact image set, supported classes, original coordinate space, full denominator, provenance, cap behavior and metric units. Inspect class-by-size support and raw-count operating results before interpreting an aggregate size effect. Verify both new checkpoints on the same held-out full-validation set; inspect training provenance before upgrading status from diagnostic to final benchmark. Final baseline numbers remain explicitly unfilled in the [status page](../evaluation_baselines.md).
-
-For refreshed report figures, reuse **`src/eval/plots.py`** and **`src/utils/plot_style.py`**. Normally provide two or three complementary figures with **quantified pattern → comparison → interpretation → practical implication → support/confounding check**. Use **bold keywords**, comparison tables and $\implies$ conclusions. Keep analytic examples, observed measurements, association and causal attribution distinct. Record failed checks and fixes; remove temporary scripts after use. Preserve the phase-end review convention for further work.
+This verification utility:
+1. **Verifies Split Isolation:** Computes rolling SHA-256 hashes across all 14,018 image files in 1 MiB blocks. Confirms zero shared image hashes and zero shared filenames between training and validation partitions.
+2. **Reconciles Annotation Support:**
+   - `aitodv2_train.json`: 11,214 images, 301,534 raw annotations (40 degenerate, 301,494 valid).
+   - `aitod_val.json`: 2,804 images, 75,091 raw annotations (9 degenerate, 75,082 valid).
+   - Combined trainval reconciliation: $301,534 + 75,091 = 376,625$ annotations across 14,018 images.
+3. **Exports Normalized Ground Truth:** Writes sanitized evaluation ground truth with 1-based annotation IDs to `runs/eval/input_audit/val_ground_truth.json` for reproducible downstream evaluation.

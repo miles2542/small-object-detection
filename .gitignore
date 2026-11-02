@@ -36,6 +36,7 @@ docs/agents/
 docs/adr/
 .scratch/
 temp/
+archive/
 
 # OS & Editor
 .DS_Store

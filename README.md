@@ -90,19 +90,20 @@ sod eval run --help
 sod eval run --weights runs/train/yolov8s_aitod_mini/weights/best.pt --data configs/aitod_mini.yaml --split val --output-dir runs/eval/yolov8s_trained
 
 # Reuse saved predictions with their exact COCO ground-truth JSON
-sod eval run --data runs/eval/input_audit/mini_val_ground_truth.json --predictions runs/eval/phase2_yolo26s_smoke/predictions.json --smoke --output-dir runs/eval/yolo26s_json
+sod eval run --data runs/eval/input_audit/mini_val_ground_truth.json --predictions runs/eval/yolo26s_smoke/predictions.json --smoke --output-dir runs/eval/yolo26s_json
 ```
 
 Use a fresh output directory for each run. `--smoke` explicitly permits pretrained partial-vocabulary diagnostics; these do not establish trained AI-TOD baseline performance. `--confidence` changes fixed-confidence precision/recall while leaving the AP ranking unchanged. Saved-prediction mode needs no model inference or local image directory.
 
-The CLI saves full image coverage, provenance, AP/AR, per-class size metrics and PR tensors. See the [evaluation reports](docs/evaluation/README.md) for the protocol, validation evidence, figures and benchmark handoff status.
+The CLI saves full image coverage, provenance, AP/AR, per-class size metrics and PR tensors. See the [evaluation guide](docs/evaluation/README.md) for the protocol, validation evidence, figures and benchmark handoff status.
 
 ### 5. Saved-Run Analysis and Handoff
 
 ```powershell
-python -m src.eval.analysis --help
-# Compare two complete CLI runs; no inference is repeated.
-python -m src.eval.analysis --run YOLOv8s=runs/eval/v8_full --run YOLO26s=runs/eval/26_full --output-dir runs/eval/full_analysis --image-root data/ai-tod-v2/splits/full/images/val
+sod eval compare --help
+
+# Compare two complete CLI evaluation runs; no inference is repeated.
+sod eval compare --run YOLOv8s=runs/eval/v8_full --run YOLO26s=runs/eval/26_full --output-dir runs/eval/full_analysis --image-root data/ai-tod-v2/splits/full/images/val
 ```
 
-Run `sod eval run` first to create the two input directories. Analysis checks matching GT/protocol/export settings and reproduces saved metrics, then writes AP comparisons, signed class-controlled size gaps, support, optional error crops, `analysis.json` and `comparison.md`. Smoke inputs stay explicitly labeled; other inputs require training-provenance review. See the [benchmark status and handoff](docs/evaluation_baselines.md) and [Phase 5 report](docs/evaluation/05_analysis_and_handoff.md).
+Run `sod eval run` first to create the two input directories. Analysis checks matching GT/protocol/export settings and reproduces saved metrics, then writes AP comparisons, signed class-controlled size gaps, support, optional error crops, `analysis.json` and `comparison.md`. Smoke inputs stay explicitly labeled; other inputs require training-provenance review. See the [evaluation guide](docs/evaluation/README.md) and [benchmark status](docs/evaluation_baselines.md).

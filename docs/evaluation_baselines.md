@@ -1,6 +1,6 @@
 # AI-TOD size evaluation: benchmark status and numerical handoff
 
-**Implementation:** Phases 1-5 tooling and diagnostic handoff complete.
+**Implementation:** Evaluation harness, export adapter, and comparative analysis tooling complete.
 
 **Official benchmark:** **Pending genuine trained-model artifacts.**
 
@@ -19,7 +19,7 @@ No score below fills these official entries. COCO-pretrained partial-vocabulary 
 
 ## Measured smoke snapshot
 
-The following tables were generated from the full-precision Phase 5 analysis. Both runs retain **200 images and 5,054 eligible GT**. Eight-class AP averages supported categories, not GT-weighted instances. APvt/APt/APs/APm use the assignment's four closed micro intervals; displayed values are percentages.
+The following tables were generated from the comparative smoke analysis. Both runs retain **200 images and 5,054 eligible GT**. Eight-class AP averages supported categories, not GT-weighted instances. APvt/APt/APs/APm use the standardized closed micro-scale intervals; displayed values are percentages.
 
 **Status:** smoke_diagnostic_only
 
@@ -55,12 +55,12 @@ Signed gap = reference AP minus bin AP; negative is improvement. Relative loss i
 
 ### Input identity
 
-- **YOLOv8s:** `runs/eval/phase4_yolov8s_json`; purpose `smoke_only`.
+- **YOLOv8s:** `runs/eval/yolov8s_json`; purpose `smoke_only`.
   Metrics SHA-256: `d9cdedf79b1035a38bf4c64fbdd09d799a19b3e33e845cc1ba50af22162e6359`.
   Annotations: `40a8a2f516c7e9ce630340203d80f4c6f036b8b7d6f974349cf85762a4a91d7b`.
   Predictions: `f494a632a6751e93c32053ab1f525a6fdadd9819fd0c404f26074502826d3030`.
   Weights: `1f47a78bf100391c2a140b7ac73a1caae18c32779be7d310658112f7ac9aa78a`.
-- **YOLO26s:** `runs/eval/phase4_yolo26s_json`; purpose `smoke_only`.
+- **YOLO26s:** `runs/eval/yolo26s_json`; purpose `smoke_only`.
   Metrics SHA-256: `852aa33f7b61878f73abea16057b9a9d820a046473b12363955d98552c97c729`.
   Annotations: `40a8a2f516c7e9ce630340203d80f4c6f036b8b7d6f974349cf85762a4a91d7b`.
   Predictions: `02dfd9a98ae342b1e91a3c4ed74dadbd741954ec627b8d3ed12e238edd654675`.
@@ -77,7 +77,7 @@ A small or empty reference can make a ratio unstable or undefined. Inspect suppo
 ```powershell
 sod eval run --weights PATH_TO_V8_BEST.pt --data configs/aitod_full.yaml --split val --output-dir runs/eval/v8_full
 sod eval run --weights PATH_TO_26_BEST.pt --data configs/aitod_full.yaml --split val --output-dir runs/eval/26_full
-python -m src.eval.analysis --run YOLOv8s=runs/eval/v8_full --run YOLO26s=runs/eval/26_full --output-dir runs/eval/full_analysis --image-root data/ai-tod-v2/splits/full/images/val
+sod eval compare --run YOLOv8s=runs/eval/v8_full --run YOLO26s=runs/eval/26_full --output-dir runs/eval/full_analysis --image-root data/ai-tod-v2/splits/full/images/val
 ```
 
 3. Review exact validation coverage, protocol, vocabulary, cap hits, training provenance and supported/empty bins. Inspect lower-cap sensitivity on genuine outputs; the smoke cap observations do not certify future models. The analyzer reproduces numerical inputs but never automatically certifies training provenance.
@@ -99,13 +99,10 @@ The same path supports P2/NWD checkpoints. SAHI outputs must merge tile coordina
 
 For a zero/missing AP reference, relative loss is **N/A**. Negative gaps mean improvements. Adjacent closed bins share boundary objects. Class-controlled comparisons help separate composition effects but do not identify causal mechanisms; support and context still matter.
 
-## Reports and figures
+## Documentation & References
 
-- [Working plan](member2_working_plan.md)
-- [Protocol/input verification](evaluation/01_protocol_and_inputs.md)
-- [Prediction export](evaluation/02_prediction_export.md)
-- [Evaluator validation and PR/IoU/confidence figures](evaluation/03_evaluator_validation.md)
-- [CLI integration and revised workflow/coverage/heatmap figures](evaluation/04_cli_and_baselines.md)
-- [Phase 5: measured trends, gaps, error examples and handoff](evaluation/05_analysis_and_handoff.md)
+- [AI-TOD Micro-Scale Evaluation Guide](evaluation/README.md)
+- [Dataset Analysis & Scale Diagnostic Report](dataset_analysis.md)
+- [Team Quickstart & Workflow Guide](team_quickstart.md)
 
-**Validation:** 25 test methods pass; Ruff checks pass. The genuine trained benchmark and scientific conclusion gate remains visibly open. Repository delivery is tracked on the `feat/m2-evaluation-coco` feature branch; final trained results and any merge to main are separate milestones.
+**Validation:** 26 test methods pass; Ruff checks pass. The genuine trained benchmark and scientific conclusion gate remains open pending trained checkpoint artifacts.

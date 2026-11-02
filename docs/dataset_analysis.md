@@ -2,7 +2,7 @@
 
 **Dataset:** AI-TOD-v2 ($800 \times 800$ aerial imagery, micro-scale targets)  
 **Annotations analyzed:** 376,625 instances across 14,018 images (trainval)  
-**Splits evaluated:** `aitodv2_train.json` (11,214 images, 301,534 annotations), `aitod_val.json` (2,804 images, 70,424 annotations), `aitodv2_trainval.json` (14,018 images, 376,625 annotations)  
+**Splits evaluated:** `aitodv2_train.json` (11,214 images, 301,534 annotations), `aitod_val.json` (2,804 images, 75,091 annotations), `aitodv2_trainval.json` (14,018 images, 376,625 annotations)  
 **Tooling/Environment:** Python 3.11, Pandas, NumPy, Matplotlib, Seaborn (`src.data.eda` / `sod data eda`)  
 
 ---
@@ -17,7 +17,7 @@
   - $P_2$ requirement (stride 4): A dedicated $P_2$ high-resolution head yields $2.96 \times 2.96$ cells ($\sim 8.75$ spatial feature elements) for a median 11.83 px target and $2.00 \times 2.00$ cells for an 8.0 px target, preserving local structural gradients and boundaries.
 - **Bounding box geometry and aspect ratio:** Object aspect ratios ($w/h$) exhibit a sharp distribution with a median of exactly 1.00 and 25th-75th percentiles between 0.67 and 1.67. Micro targets are overwhelmingly square or isotropic aerial footprints, concentrated in a dense cluster at $w \in [10, 14]$ px and $h \in [10, 14]$ px.
 - **Severe category imbalance:** The dataset is heavily dominated by the `vehicle` class, accounting for 87.47% of trainval annotations (329,404 instances). `person` (4.86%) and `ship` (4.76%) form secondary clusters, while classes such as `airplane` (0.22%), `bridge` (0.20%), and `wind-mill` (0.07%) exhibit extreme sparsity.
-- **Data sanitization requirement:** The audit identified **40 zero-dimension annotations** in `aitodv2_train.json` ($w \le 0$ or $h \le 0$) and **49** in `aitodv2_trainval.json`. Ingestion and training dataloaders must filter or clamp annotations where $\min(w, h) < 1.0$ px to prevent numerical instability, division by zero, and loss divergence during regression optimization.
+- **Data sanitization requirement:** The audit identified **40 zero-dimension annotations** in `aitodv2_train.json` ($w \le 0$ or $h \le 0$), **9** in `aitod_val.json`, and **49** in `aitodv2_trainval.json`. Ingestion and training dataloaders must filter or clamp annotations where $\min(w, h) < 1.0$ px to prevent numerical instability, division by zero, and loss divergence during regression optimization.
 
 ---
 
@@ -48,10 +48,10 @@
 | Metric | Train Split | Validation Split | Trainval Split |
 | :--- | :--- | :--- | :--- |
 | **Total images** | 11,214 | 2,804 | 14,018 |
-| **Total annotations** | 301,534 | 70,424 | 376,625 |
-| **Valid annotations** | 301,494 | 70,424 | 376,576 |
-| **Zero-dimension annotations ($w \le 0$ or $h \le 0$)** | 40 | 0 | 49 |
-| **Average target density** | 26.89 objs/img | 25.12 objs/img | 26.87 objs/img |
+| **Total annotations** | 301,534 | 75,091 | 376,625 |
+| **Valid annotations** | 301,494 | 75,082 | 376,576 |
+| **Zero-dimension annotations ($w \le 0$ or $h \le 0$)** | 40 | 9 | 49 |
+| **Average target density** | 26.89 objs/img | 26.78 objs/img | 26.87 objs/img |
 | **Mean scale $\sqrt{w \times h}$** | 12.72 px | 12.63 px | 12.67 px |
 | **Standard deviation** | 5.76 px | 5.94 px | 5.75 px |
 | **Median scale** | 11.83 px | 11.83 px | 11.83 px |
@@ -62,26 +62,26 @@
 
 | Scale Bin | Range (pixels) | Train Count (%) | Validation Count (%) | Trainval Count (%) |
 | :--- | :--- | :--- | :--- | :--- |
-| **$AP_{vt}$ (Very Tiny)** | $\le 8$ px | 38,942 (12.92%) | 10,784 (15.31%) | 50,002 (13.28%) |
-| **$AP_t$ (Tiny)** | $8 - 16$ px | 221,721 (73.54%) | 49,724 (70.61%) | 275,896 (73.26%) |
-| **$AP_s$ (Small)** | $16 - 32$ px | 35,329 (11.72%) | 8,600 (12.21%) | 43,918 (11.66%) |
-| **$AP_m$ (Medium)** | $32 - 64$ px | 5,497 (1.82%) | 1,316 (1.87%) | 6,753 (1.79%) |
-| **Normal / Large** | $> 64$ px | 5 (0.00%) | 0 (0.00%) | 7 (0.00%) |
-| **Micro sub-total ($AP_{vt} + AP_t$)** | $\le 16$ px | **260,663 (86.46%)** | **60,508 (85.92%)** | **325,898 (86.54%)** |
-| **COCO Small equivalent** | $< 32$ px | **295,992 (98.17%)** | **69,108 (98.13%)** | **369,816 (98.20%)** |
+| **$AP_{vt}$ (Very Tiny)** | $\le 8$ px | 38,942 (12.92%) | 11,060 (14.73%) | 50,002 (13.28%) |
+| **$AP_t$ (Tiny)** | $8 - 16$ px | 221,721 (73.54%) | 54,175 (72.15%) | 275,896 (73.26%) |
+| **$AP_s$ (Small)** | $16 - 32$ px | 35,329 (11.72%) | 8,589 (11.44%) | 43,918 (11.66%) |
+| **$AP_m$ (Medium)** | $32 - 64$ px | 5,497 (1.82%) | 1,256 (1.67%) | 6,753 (1.79%) |
+| **Normal / Large** | $> 64$ px | 5 (0.00%) | 2 (0.00%) | 7 (0.00%) |
+| **Micro sub-total ($AP_{vt} + AP_t$)** | $\le 16$ px | **260,663 (86.46%)** | **65,235 (86.88%)** | **325,898 (86.54%)** |
+| **COCO Small equivalent** | $< 32$ px | **295,992 (98.17%)** | **73,824 (98.32%)** | **369,816 (98.20%)** |
 
 ### Category Distribution Across Splits
 
 | Category | Train Count | Train % | Val Count | Val % | Trainval Count | Trainval % |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **vehicle** | 265,164 | 87.95% | 59,904 | 85.06% | 329,404 | 87.47% |
-| **person** | 14,446 | 4.79% | 3,841 | 5.45% | 18,306 | 4.86% |
-| **ship** | 14,072 | 4.67% | 3,791 | 5.38% | 17,911 | 4.76% |
-| **storage-tank** | 5,576 | 1.85% | 2,477 | 3.52% | 8,209 | 2.18% |
-| **swimming-pool** | 787 | 0.26% | 34 | 0.05% | 899 | 0.24% |
-| **airplane** | 666 | 0.22% | 170 | 0.24% | 843 | 0.22% |
-| **bridge** | 603 | 0.20% | 140 | 0.20% | 755 | 0.20% |
-| **wind-mill** | 180 | 0.06% | 67 | 0.10% | 249 | 0.07% |
+| **vehicle** | 265,164 | 87.95% | 64,240 | 85.56% | 329,404 | 87.47% |
+| **person** | 14,446 | 4.79% | 3,860 | 5.14% | 18,306 | 4.86% |
+| **ship** | 14,072 | 4.67% | 3,839 | 5.11% | 17,911 | 4.76% |
+| **storage-tank** | 5,576 | 1.85% | 2,633 | 3.51% | 8,209 | 2.18% |
+| **swimming-pool** | 787 | 0.26% | 112 | 0.15% | 899 | 0.24% |
+| **airplane** | 666 | 0.22% | 177 | 0.24% | 843 | 0.22% |
+| **bridge** | 603 | 0.20% | 152 | 0.20% | 755 | 0.20% |
+| **wind-mill** | 180 | 0.06% | 69 | 0.09% | 249 | 0.07% |
 
 ---
 
