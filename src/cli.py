@@ -35,6 +35,211 @@ def main_callback() -> None:
     """Entry point for Small Object Detection CLI."""
 
 
+@eval_app.command("run")
+def eval_run(
+    data: Path = typer.Option(
+        ...,
+        "--data",
+        exists=True,
+        dir_okay=False,
+        help="Dataset YAML for weights, or exact COCO JSON for saved predictions",
+    ),
+    weights: Path | None = typer.Option(None, "--weights", exists=True, dir_okay=False),
+    predictions: Path | None = typer.Option(None, "--predictions", exists=True, dir_okay=False),
+    split: str = typer.Option(
+        "val", "--split", help="train, val or test; JSON defines its own image set"
+    ),
+    output_dir: Path = typer.Option(Path("runs/eval/result"), "--output-dir", "-o"),
+    annotations: Path | None = typer.Option(None, "--annotations", exists=True, dir_okay=False),
+    image_root: Path | None = typer.Option(None, "--image-root", exists=True, file_okay=False),
+    smoke: bool = typer.Option(
+        False, "--smoke", help="Explicitly allow pretrained/partial-vocabulary diagnostics"
+    ),
+    device: str = typer.Option("cpu", "--device"),
+    batch_size: int = typer.Option(4, "--batch-size", min=1),
+    confidence: float | None = typer.Option(
+        None,
+        "--confidence",
+        min=0,
+        max=1,
+        help="Operating-point score only; AP ranking stays unchanged",
+    ),
+) -> None:
+    """Evaluate COCO predictions or export and evaluate a native .pt checkpoint."""
+    from src.eval.runner import run_evaluation
+
+    try:
+        metrics = run_evaluation(
+            data,
+            output_dir,
+            weights=weights,
+            predictions=predictions,
+            split=split,
+            annotations=annotations,
+            image_root=image_root,
+            smoke=smoke,
+            device=device,
+            batch_size=batch_size,
+            confidence=confidence,
+        )
+    except (ValueError, TypeError, KeyError, OSError) as error:
+        ui.print_error(str(error))
+        raise typer.Exit(code=1) from error
+    purpose = metrics["provenance"]["purpose"]
+    ui.print_header(
+        "AI-TOD size-based evaluation",
+        f"{purpose} | {len(metrics['image_ids'])} images | {metrics['protocol']['name']}",
+    )
+    if purpose != "evaluation":
+        ui.print_warning(
+            "SMOKE ONLY - not trained AI-TOD baseline metrics"
+            if purpose == "smoke_only"
+            else "External predictions: training/export provenance is unverified"
+        )
+
+    def percent(value):
+        return "N/A" if value is None else f"{100 * value:.4f}"
+
+    ui.print_table(
+        "AP / AR (%)",
+        ["Area", "GT", "AP", "AP50", "AP75", "AR"],
+        [
+            [
+                label,
+                str(values["support"]),
+                *[percent(values[k]) for k in ["AP", "AP50", "AP75", "AR"]],
+            ]
+            for label, values in metrics["bins"].items()
+        ],
+    )
+    ui.print_table(
+        "Fixed-confidence counts at IoU 0.50",
+        ["Area", "TP", "FP", "FN", "P (%)", "R (%)"],
+        [
+            [
+                label,
+                *[str(values["operating_point"]["micro"][k][0]) for k in ["tp", "fp", "fn"]],
+                *[
+                    percent(values["operating_point"]["micro"][k][0])
+                    for k in ["precision", "recall"]
+                ],
+            ]
+            for label, values in metrics["bins"].items()
+        ],
+    )
+    ui.print_success(
+        f"Results: {output_dir / 'evaluation'} | operating score: {metrics['protocol']['operating_confidence']}"
+    )
+
+
+@eval_app.command("compare")
+def eval_compare(
+    runs: list[str] = typer.Option(
+        ...,
+        "--run",
+        "-r",
+        help="Run specifiers in LABEL=RUN_DIRECTORY format (e.g. --run baseline=runs/eval/yolov8s --run exp=runs/eval/sahi)",
+    ),
+    output_dir: Path = typer.Option(
+        Path("runs/eval/comparison"),
+        "--output-dir",
+        "-o",
+        help="Destination directory for comparison report, figures, and analysis",
+    ),
+    category_id: int | None = typer.Option(
+        None,
+        "--category-id",
+        "-c",
+        help="Target category ID for class-controlled scale gap analysis (defaults to 1 if present, else first available)",
+    ),
+    reference_bin: str = typer.Option(
+        "small",
+        "--reference-bin",
+        help="Reference size bin for AP gap calculation (verytiny, tiny, small, medium)",
+    ),
+    image_root: Path | None = typer.Option(
+        None,
+        "--image-root",
+        exists=True,
+        file_okay=False,
+        help="Optional image directory to render qualitative failure visualizations",
+    ),
+) -> None:
+    """Compare evaluation runs, compute scale-controlled gaps, and output diagnostic reports."""
+    from src.eval.analysis import analyze_runs
+
+    pairs = [item.split("=", 1) for item in runs]
+    if any(len(pair) != 2 or not pair[0] or not pair[1] for pair in pairs):
+        ui.print_error("Each --run must be in LABEL=RUN_DIRECTORY format (e.g. --run baseline=runs/eval/base)")
+        raise typer.Exit(code=1)
+    if len({p[0] for p in pairs}) != len(pairs):
+        ui.print_error("Run labels must be distinct")
+        raise typer.Exit(code=1)
+    run_dict = {name: Path(path) for name, path in pairs}
+
+    try:
+        analysis = analyze_runs(
+            run_dict,
+            output_dir,
+            category_id=category_id,
+            reference_bin=reference_bin,
+            image_root=image_root,
+        )
+    except (ValueError, TypeError, KeyError, OSError) as error:
+        ui.print_error(str(error))
+        raise typer.Exit(code=1) from error
+
+    cat_id = analysis["category_id"]
+    ui.print_header(
+        "AI-TOD Evaluation Comparison",
+        f"Status: {analysis['status']} | Ref bin: {analysis['reference_bin']} | Target class: ID {cat_id}",
+    )
+
+    def percent(value):
+        return "N/A" if value is None else f"{100 * value:.4f}"
+
+    def gap_fmt(value):
+        return "N/A" if value is None else f"{value:+.4f}"
+
+    headers = ["Model", "Area", "GT", "AP (%)", "AP50 (%)", "AP75 (%)", "AR (%)"]
+    rows = []
+    for model_name, data in analysis["models"].items():
+        for label, item in data["bins"].items():
+            rows.append([
+                model_name,
+                label,
+                str(item["support"]),
+                percent(item["AP"]),
+                percent(item["AP50"]),
+                percent(item["AP75"]),
+                percent(item["AR"]),
+            ])
+    ui.print_table("Model Comparison Across Scale Bins", headers, rows)
+
+    first_model = next(iter(analysis["models"].values()))
+    cat_name = first_model.get("category_name", f"Class {cat_id}")
+    gap_headers = ["Model", "Class", "Area", "GT", "AP (%)", f"Gap vs {reference_bin} (pp)", "Rel Loss (%)"]
+    gap_rows = []
+    for model_name, data in analysis["models"].items():
+        c_name = data.get("category_name", str(cat_id))
+        for label, gap in data["class_gaps"].items():
+            item = data["class_bins"][label]
+            gap_rows.append([
+                model_name,
+                c_name,
+                label,
+                str(item["support"]),
+                percent(item["AP"]),
+                gap_fmt(gap["gap_pp"]),
+                gap_fmt(gap["relative_loss_percent"]),
+            ])
+    ui.print_table(f"Class-Controlled Scale Gaps ({cat_name} vs {reference_bin})", gap_headers, gap_rows)
+
+    ui.print_success(
+        f"Comparison saved to {output_dir / 'analysis.json'} | report: {output_dir / 'comparison.md'}"
+    )
+
+
 @bench_app.command("runtime")
 def bench_runtime(
     config: Path = typer.Option(
