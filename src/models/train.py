@@ -52,7 +52,7 @@ def resolve_model_weights(model_identifier: str) -> str:
     if local_in_dir.exists():
         return str(local_in_dir)
 
-    # 2. Check direct path or root
+    # 2. Check direct path or root fallback
     direct_path = Path(model_identifier)
     if direct_path.exists():
         return str(direct_path)
@@ -61,8 +61,9 @@ def resolve_model_weights(model_identifier: str) -> str:
     if in_root.exists():
         return str(in_root)
 
-    # 3. Return target filename so Ultralytics automatically downloads from official CDN
-    return target_filename
+    # 3. Direct Ultralytics CDN download into weights/pretrained/ rather than CWD
+    DEFAULT_WEIGHTS_DIR.mkdir(parents=True, exist_ok=True)
+    return str(DEFAULT_WEIGHTS_DIR / target_filename)
 
 
 def train_baseline(

@@ -125,9 +125,18 @@ Auto-detects GPU and batch size 16:
 sod train run --model yolo26s --config configs/aitod_mini.yaml --epochs 10
 ```
 
-### Profile C: Local CPU or Apple Silicon (Fast sanity checks)
+#### Profile C: Local CPU or Apple Silicon (Fast sanity checks)
 ```powershell
 sod train run --model yolov8s --config configs/aitod_mini.yaml --epochs 1 --fraction 0.05
+```
+
+### Profile D: Size-Based Evaluation & Run Comparison
+```powershell
+# Evaluate a trained checkpoint or predictions on AI-TOD validation split
+sod eval run --weights runs/train/yolov8s_aitod_mini/weights/best.pt --data configs/aitod_mini.yaml --split val --output-dir runs/eval/yolov8s_val
+
+# Compare two completed runs across micro-scale bins (APvt, APt, APs, APm)
+sod eval compare --run baseline=runs/eval/yolov8s_val --run sahi=runs/eval/yolov8s_sahi --output-dir runs/eval/comparison
 ```
 
 ---
@@ -136,34 +145,29 @@ sod train run --model yolov8s --config configs/aitod_mini.yaml --epochs 1 --frac
 
 Milestone 1 delivers the verified foundation, EDA, and baseline pipeline. Subsequent project tasks are distributed across team members as follows:
 
-### Member 1
+### Member 1 (Lead & Infrastructure)
 - **Completed (M1):** Ingestion pipeline, empirical EDA (`docs/dataset_analysis.md`), stratified mini-split converter (`src/data/`), baseline training engine (`src/models/train.py`), Kaggle remote runner orchestration, and repository curation.
 - **Ongoing Responsibilities:** Code review and milestone integration across all teammate PRs, remote Kaggle cloud compute coordination, and overall system architecture integrity.
 
-### Member 2 (Size-Based Dual-Surface Evaluation)
-- **Role:** Build and integrate the fine-grained micro-scale evaluation module in `src/eval/`.
-- **Key Deliverable:** Standard aggregate $mAP_{50:95}$ obscures microscopic target loss. Implement evaluation pipelines that ingest baseline predictions and calculate AP across official AI-TOD scale bins:
-  - Very Tiny ($AP_{vt}$): $\text{scale} \le 8$ px.
-  - Tiny ($AP_t$): $8 < \text{scale} \le 16$ px.
-  - Small ($AP_s$): $16 < \text{scale} \le 32$ px.
-  - Medium ($AP_m$): $32 < \text{scale} \le 64$ px.
-- **Reference Checkpoints:** `runs/train/yolov8s_aitod_mini/weights/best.pt` and `yolo26s_aitod_mini/weights/best.pt`.
+### Member 2 (Size-Based Micro-Scale Evaluation)
+- **Completed (M2):** Built and integrated the standardized micro-scale evaluation module in `src/eval/` (PR #1).
+- **Deliverables:** Custom `COCOeval` harness calculating $AP_{vt}$ ($[0, 64]$ px$^2$), $AP_t$ ($[64, 256]$ px$^2$), $AP_s$ ($[256, 1024]$ px$^2$), and $AP_m$ ($[1024, 10^{10}]$ px$^2$), prediction exporter, `sod eval run` and `sod eval compare` CLI subcommands (`docs/evaluation/README.md`).
 
-### Member 3 (Architecture Modification — P2 High-Resolution Stride Head)
+### Member 3 (Inference Strategies & Slicing — SAHI)
+- **Role:** Benchmark and optimize high-resolution inference and sliced patch inference (SAHI) in `src/infer/`.
+- **Key Deliverable:** Benchmark high-resolution input inference ($1280 \times 1280$ and $1600 \times 1600$) and tune SAHI slicing windows (e.g. $512 \times 512$ with $0.20$ overlap) on $800 \times 800$ frames. Quantify the trade-off between micro-target recall recovery ($AP_{vt}, AP_t$) and inference latency. Export standardized predictions for evaluation via `sod eval run`.
+
+### Member 4 (Architecture Modification — P2 High-Resolution Stride Head)
 - **Role:** Modify model architectures in `src/models/` to introduce a $P_2$ ($4\times$ downsampling stride) feature pyramid head.
-- **Key Deliverable:** Our EDA proved that median targets (11.83 px) collapse to $1.48 \times 1.48$ cells at $P_3$ and $<1$ cell at $P_4/P_5$. Implement a high-resolution $P_2$ detection head to preserve $2.96 \times 2.96$ spatial cells. Train and compare against baseline YOLOv8s/YOLO26s.
+- **Key Deliverable:** Our EDA proved that median targets (11.83 px) collapse to $1.48 \times 1.48$ cells at $P_3$ and $<1$ cell at $P_4/P_5$. Implement a high-resolution $P_2$ detection head to preserve $2.96 \times 2.96$ spatial cells. Train and benchmark against baseline YOLOv8s/YOLO26s.
 
-### Member 4 (Slicing-Aided Hyper Inference — SAHI)
-- **Role:** Benchmark and optimize sliced patch inference in `src/infer/`.
-- **Key Deliverable:** Tune SAHI slicing windows (e.g. $512 \times 512$ with 0.2 overlap) on $800 \times 800$ frames. Evaluate the trade-off between localization recovery on micro targets versus the established $\sim 3.5\times$ computational latency overhead.
-
-### Member 5 (Loss Function Ablation — NWD)
-- **Role:** Implement Normalized Gaussian Wasserstein Distance (NWD) loss in `src/models/`.
-- **Key Deliverable:** Small bounding box IoU drops from 1.0 to 0.47 under a 2-pixel shift. Integrate NWD loss to provide smooth distance gradients for sub-16px boxes, replacing or supplementing CIoU/DFL, and benchmark convergence improvements.
+### Member 5 (Error Diagnosis — TIDE Metric Analysis)
+- **Role:** Implement fine-grained failure diagnosis and error decomposition.
+- **Key Deliverable:** Integrate TIDE metric decomposition (Classification, Localization, Both, Duplicate, Background, Missed error categories) across AI-TOD micro-scale bins to isolate the root drivers of performance loss between baseline and ablated models.
 
 ### Member 6 (Benchmarking Synthesis, Final Report & Defense)
-- **Role:** Consolidate cross-model ablation metrics, generate comparative tables, and prepare project defense materials.
-- **Key Deliverable:** Aggregate validation curves, confusion matrices, and results from `runs/train/` and `runs/kaggle/`. Author the final academic paper and presentation slides comparing standard YOLOv8s vs. YOLO26s with $P_2$, SAHI, and NWD ablations.
+- **Role:** Common evaluation protocol audit, fairness checks, master benchmark synthesis table, final report & presentation deck.
+- **Key Deliverable:** Aggregate validation curves, confusion matrices, and benchmark tables from `runs/eval/`. Author the final academic paper and presentation slides comparing standard YOLOv8s vs. YOLO26s with $P_2$, SAHI, and NWD ablations.
 
 ---
 
@@ -180,9 +184,9 @@ Before making edits, create a new branch from `main`:
 - **Using VS Code GUI:**
   1. Click the current branch name (`main`) in the bottom-left status bar (or open the **Source Control** tab `Ctrl+Shift+G` $\rightarrow$ click `...` $\rightarrow$ **Branch** $\rightarrow$ **Create Branch...**).
   2. Enter a descriptive branch name, e.g.:
-     - Member 2: `feat/m2-evaluation-coco`
-     - Member 3: `feat/m3-p2-stride-head`
-     - Member 4: `feat/m4-sahi-inference`
+     - Member 3: `feat/m3-sahi-inference`
+     - Member 4: `feat/m4-p2-stride-head`
+     - Member 5: `feat/m5-tide-analysis`
      - Member 5: `feat/m5-nwd-loss`
      - Member 6: `feat/m6-benchmarking-report`
 - **Using VS Code Terminal:**
