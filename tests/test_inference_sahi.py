@@ -184,6 +184,19 @@ class TestSahiInferenceRunner(unittest.TestCase):
         self.assertAlmostEqual(detections[1]["score"], 0.9)
         self.assertAlmostEqual(detections[2]["score"], 0.8)
 
+    def test_coordinate_shift_un_tiling_invariant(self) -> None:
+        """Verify explicit patch coordinate restitution: x_global = x_patch + x_offset."""
+        pred = ObjectPrediction(
+            bbox=[10.0, 20.0, 30.0, 45.0],  # [minx, miny, maxx, maxy] in patch
+            category_id=0,
+            category_name="airplane",
+            score=0.92,
+            shift_amount=[512, 256],
+        )
+        shifted = pred.get_shifted_object_prediction()
+        self.assertEqual(shifted.bbox.to_xywh(), [522.0, 276.0, 20.0, 25.0])
+        self.assertEqual(shifted.bbox.to_xyxy(), [522.0, 276.0, 542.0, 301.0])
+
 
 class TestExportSahiPredictions(unittest.TestCase):
     """Test full dataset split export pipeline and manifest writing."""

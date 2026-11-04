@@ -172,6 +172,66 @@ class TestInferenceCli(unittest.TestCase):
         self.assertIn("1280x1280", result.output)
         mock_bench.assert_called_once()
 
+    @patch("src.infer.sahi.export_sahi_predictions")
+    @patch("src.infer.high_res.benchmark_resolutions")
+    def test_infer_bench_with_sahi_execution(
+        self, mock_bench: MagicMock, mock_sahi_export: MagicMock
+    ) -> None:
+        out_dir = self.root / "bench_sahi_out"
+        mock_bench.return_value = {
+            "weights": str(self.weights),
+            "device": "cpu",
+            "sample_count": 2,
+            "resolutions": {
+                "800": {
+                    "image_size": 800,
+                    "latency": {"mean_total_ms": 12.0, "throughput_fps": 83.3},
+                    "memory": {"peak_mb": 110.0},
+                    "total_detections": 5,
+                },
+            },
+        }
+        mock_sahi_export.return_value = {
+            "total_images": 2,
+            "total_detections": 8,
+            "zero_detection_image_ids": [],
+            "latency": {
+                "mean_slice_ms": 1.0,
+                "mean_prediction_ms": 15.0,
+                "mean_postprocess_ms": 2.0,
+                "mean_total_ms": 18.0,
+                "throughput_fps": 55.5,
+            },
+        }
+
+        result = self.runner.invoke(
+            app,
+            [
+                "infer",
+                "bench",
+                "--weights",
+                str(self.weights),
+                "--data",
+                str(self.yaml_file),
+                "--output-dir",
+                str(out_dir),
+                "--resolutions",
+                "800",
+                "--with-sahi",
+                "--sample-limit",
+                "2",
+            ],
+        )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIn("SAHI Sliced", result.output)
+        self.assertIn("55.50", result.output)
+        mock_bench.assert_called_once()
+        mock_sahi_export.assert_called_once()
+        # Verify sample_limit was forwarded to export_sahi_predictions
+        _, kwargs = mock_sahi_export.call_args
+        self.assertEqual(kwargs.get("sample_limit"), 2)
+
 
 if __name__ == "__main__":
     unittest.main()

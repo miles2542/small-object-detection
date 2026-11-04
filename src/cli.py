@@ -532,6 +532,7 @@ def infer_bench(
                 "latency": sahi_manifest["latency"],
                 "total_detections": sahi_manifest["total_detections"],
             }
+            output_dir.mkdir(parents=True, exist_ok=True)
             (output_dir / "resolution_benchmark.json").write_text(
                 json.dumps(summary, indent=2), encoding="utf-8"
             )
