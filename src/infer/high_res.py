@@ -10,16 +10,17 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-import psutil
 import torch
 from PIL import Image
 from ultralytics import YOLO
 
 from src.eval.audit import sha256
 from src.eval.runner import resolve_inputs
-from src.infer.sahi import (
+from src.infer.utils import (
     CANONICAL_CLASSES,
     build_category_mapping,
+    get_peak_memory_mb,
+    reset_peak_memory,
 )
 
 
@@ -46,22 +47,6 @@ class HighResConfig:
             raise ValueError("max_detections_per_image must be positive")
         if self.batch_size <= 0:
             raise ValueError("batch_size must be positive")
-
-
-def get_peak_memory_mb(device: str = "cpu") -> float:
-    """Retrieve peak memory consumption in megabytes (GPU VRAM or CPU RAM)."""
-    if ("cuda" in device or device.isdigit()) and torch.cuda.is_available():
-        dev_idx = int(device) if device.isdigit() else torch.cuda.current_device()
-        return float(torch.cuda.max_memory_allocated(dev_idx) / (1024 * 1024))
-    process = psutil.Process()
-    return float(process.memory_info().rss / (1024 * 1024))
-
-
-def reset_peak_memory(device: str = "cpu") -> None:
-    """Reset peak memory tracking counters if supported on the device."""
-    if ("cuda" in device or device.isdigit()) and torch.cuda.is_available():
-        dev_idx = int(device) if device.isdigit() else torch.cuda.current_device()
-        torch.cuda.reset_peak_memory_stats(dev_idx)
 
 
 class HighResInferenceRunner:
@@ -132,7 +117,8 @@ class HighResInferenceRunner:
         if native_end2end:
             predict_kwargs["nms"] = False
 
-        results = self.model.predict(**predict_kwargs)
+        with torch.inference_mode():
+            results = self.model.predict(**predict_kwargs)
         result = results[0] if isinstance(results, list) else next(iter(results))
 
         total_wall_ms = (time.perf_counter() - start_time) * 1000.0

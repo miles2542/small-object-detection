@@ -5,16 +5,19 @@ from src.infer.high_res import (
     HighResInferenceRunner,
     benchmark_resolutions,
     export_high_res_predictions,
-    get_peak_memory_mb,
-    reset_peak_memory,
 )
 from src.infer.sahi import (
-    CANONICAL_CLASSES,
-    CANONICAL_NAME_TO_ID,
     SahiConfig,
     SahiInferenceRunner,
-    build_category_mapping,
     export_sahi_predictions,
+)
+from src.infer.utils import (
+    CANONICAL_CLASSES,
+    CANONICAL_NAME_TO_ID,
+    build_category_mapping,
+    get_peak_memory_mb,
+    parse_cuda_device_index,
+    reset_peak_memory,
 )
 
 __all__ = [
@@ -29,5 +32,6 @@ __all__ = [
     "export_high_res_predictions",
     "export_sahi_predictions",
     "get_peak_memory_mb",
+    "parse_cuda_device_index",
     "reset_peak_memory",
 ]

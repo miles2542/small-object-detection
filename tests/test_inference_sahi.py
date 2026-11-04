@@ -13,12 +13,14 @@ from PIL import Image
 from sahi.prediction import ObjectPrediction, PredictionResult
 
 from src.infer.sahi import (
-    CANONICAL_CLASSES,
-    CANONICAL_NAME_TO_ID,
     SahiConfig,
     SahiInferenceRunner,
-    build_category_mapping,
     export_sahi_predictions,
+)
+from src.infer.utils import (
+    CANONICAL_CLASSES,
+    CANONICAL_NAME_TO_ID,
+    build_category_mapping,
 )
 
 

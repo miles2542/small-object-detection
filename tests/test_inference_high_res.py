@@ -20,7 +20,7 @@ from src.infer.high_res import (
     export_high_res_predictions,
     get_peak_memory_mb,
 )
-from src.infer.sahi import CANONICAL_CLASSES, CANONICAL_NAME_TO_ID
+from src.infer.utils import CANONICAL_CLASSES, CANONICAL_NAME_TO_ID
 
 
 def make_results(

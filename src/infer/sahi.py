@@ -10,27 +10,17 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import torch
 from PIL import Image
 from sahi import AutoDetectionModel
 from sahi.predict import get_sliced_prediction
 
 from src.eval.audit import sha256
 from src.eval.runner import resolve_inputs
-
-CANONICAL_CLASSES: dict[int, str] = {
-    0: "airplane",
-    1: "bridge",
-    2: "storage-tank",
-    3: "ship",
-    4: "swimming-pool",
-    5: "vehicle",
-    6: "person",
-    7: "wind-mill",
-}
-
-CANONICAL_NAME_TO_ID: dict[str, int] = {
-    name: cid for cid, name in CANONICAL_CLASSES.items()
-}
+from src.infer.utils import (
+    CANONICAL_CLASSES,
+    build_category_mapping,
+)
 
 
 @dataclass
@@ -69,43 +59,6 @@ class SahiConfig:
         valid_metrics = {"IOU", "IOS"}
         if self.postprocess_match_metric.upper() not in valid_metrics:
             raise ValueError(f"postprocess_match_metric must be one of {valid_metrics}")
-
-
-def build_category_mapping(
-    model_names: dict[int, str] | list[str],
-    target_categories: list[dict[str, Any]] | dict[int, str] | None = None,
-    smoke: bool = False,
-) -> dict[int, int]:
-    """Map model prediction indices to target dataset category IDs.
-
-    Ensures exact name-based matching, never index assumptions.
-    """
-    names = dict(enumerate(model_names)) if isinstance(model_names, list) else model_names
-
-    if target_categories is None:
-        target = CANONICAL_NAME_TO_ID
-    elif isinstance(target_categories, list):
-        target = {cat["name"]: cat["id"] for cat in target_categories}
-    else:
-        target = {name: cid for cid, name in target_categories.items()}
-
-    if (
-        len(target) == 0
-        or len(set(target.values())) != len(target)
-        or len(set(names.values())) != len(names)
-        or any(not isinstance(idx, int) or idx < 0 for idx in names)
-    ):
-        raise ValueError("Category names and IDs must be non-empty, unique, and non-negative")
-
-    if not smoke and set(names.values()) != set(target):
-        raise ValueError(
-            "Model vocabulary differs from target ground truth; use smoke=True for partial tests"
-        )
-
-    mapping = {idx: target[name] for idx, name in names.items() if name in target}
-    if not mapping:
-        raise ValueError("No matching category names found between model and target")
-    return mapping
 
 
 class SahiInferenceRunner:
@@ -164,21 +117,22 @@ class SahiInferenceRunner:
         """
         start_time = time.perf_counter()
 
-        sahi_result = get_sliced_prediction(
-            image=image if isinstance(image, (np.ndarray, Image.Image)) else str(image),
-            detection_model=self.detection_model,
-            slice_height=self.config.slice_height,
-            slice_width=self.config.slice_width,
-            overlap_height_ratio=self.config.overlap_height_ratio,
-            overlap_width_ratio=self.config.overlap_width_ratio,
-            perform_standard_pred=self.config.perform_standard_pred,
-            postprocess_type=self.config.postprocess_type.upper(),
-            postprocess_match_metric=self.config.postprocess_match_metric.upper(),
-            postprocess_match_threshold=self.config.postprocess_match_threshold,
-            postprocess_class_agnostic=self.config.postprocess_class_agnostic,
-            force_postprocess_type=True,
-            verbose=0,
-        )
+        with torch.inference_mode():
+            sahi_result = get_sliced_prediction(
+                image=image if isinstance(image, (np.ndarray, Image.Image)) else str(image),
+                detection_model=self.detection_model,
+                slice_height=self.config.slice_height,
+                slice_width=self.config.slice_width,
+                overlap_height_ratio=self.config.overlap_height_ratio,
+                overlap_width_ratio=self.config.overlap_width_ratio,
+                perform_standard_pred=self.config.perform_standard_pred,
+                postprocess_type=self.config.postprocess_type.upper(),
+                postprocess_match_metric=self.config.postprocess_match_metric.upper(),
+                postprocess_match_threshold=self.config.postprocess_match_threshold,
+                postprocess_class_agnostic=self.config.postprocess_class_agnostic,
+                force_postprocess_type=True,
+                verbose=0,
+            )
 
         total_duration_ms = (time.perf_counter() - start_time) * 1000.0
 
