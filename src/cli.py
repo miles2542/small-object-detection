@@ -523,6 +523,7 @@ def infer_bench(
                 image_root=image_root,
                 device=device,
                 smoke=smoke,
+                sample_limit=sample_limit,
             )
             summary["sahi"] = {
                 "strategy": "sahi",
@@ -573,7 +574,12 @@ def infer_bench(
             str(s_data["total_detections"]),
         ])
 
-    ui.print_table("Latency & Throughput Trade-off Summary", headers, rows)
+    ui.print_table(
+        "Latency & Throughput Trade-off Summary",
+        headers,
+        rows,
+        column_alignments=["left", "right", "right", "right", "right"],
+    )
     ui.print_success(f"Benchmark summary saved to {output_dir / 'resolution_benchmark.json'}")
 
 
