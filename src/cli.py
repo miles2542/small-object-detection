@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import typer
@@ -28,6 +29,9 @@ bench_app.add_typer(kaggle_app, name="kaggle")
 
 eval_app = typer.Typer(help="Dual-surface evaluation on AI-TOD micro-scale tiers.")
 app.add_typer(eval_app, name="eval")
+
+infer_app = typer.Typer(help="Inference strategies: High-resolution and SAHI.")
+app.add_typer(infer_app, name="infer")
 
 
 @app.callback()
@@ -238,6 +242,339 @@ def eval_compare(
     ui.print_success(
         f"Comparison saved to {output_dir / 'analysis.json'} | report: {output_dir / 'comparison.md'}"
     )
+
+
+@infer_app.command("sahi")
+def infer_sahi(
+    weights: Path = typer.Option(
+        ..., "--weights", exists=True, dir_okay=False, help="Path to model weights (.pt)"
+    ),
+    data: Path = typer.Option(
+        ..., "--data", exists=True, dir_okay=False, help="Dataset YAML or COCO ground-truth JSON"
+    ),
+    output_dir: Path = typer.Option(
+        Path("runs/infer/sahi"),
+        "--output-dir",
+        "-o",
+        help="Destination directory for predictions and manifest",
+    ),
+    split: str = typer.Option("val", "--split", help="Dataset split (train, val, test)"),
+    slice_size: int = typer.Option(
+        512, "--slice-size", min=64, help="Patch slice height and width in pixels"
+    ),
+    overlap: float = typer.Option(
+        0.20, "--overlap", min=0.0, max=0.9, help="Overlap ratio between adjacent slices"
+    ),
+    iou: float = typer.Option(
+        0.60, "--iou", min=0.0, max=1.0, help="IoU merging threshold for post-slice NMS/NMM"
+    ),
+    postprocess: str = typer.Option(
+        "GREEDYNMM",
+        "--postprocess",
+        help="Postprocessing merge strategy (GREEDYNMM, NMS, NMM)",
+    ),
+    full_frame: bool = typer.Option(
+        True,
+        "--full-frame/--no-full-frame",
+        help="Include full-frame inference alongside patches",
+    ),
+    confidence: float = typer.Option(
+        0.001, "--confidence", min=0.0, max=1.0, help="Confidence threshold"
+    ),
+    device: str = typer.Option("cpu", "--device", help="Computation device (cpu, 0, cuda:0)"),
+    smoke: bool = typer.Option(
+        False, "--smoke", help="Permit partial-vocabulary diagnostics"
+    ),
+    sample_limit: int | None = typer.Option(
+        None, "--sample-limit", min=1, help="Limit sample count for quick runs"
+    ),
+    annotations: Path | None = typer.Option(
+        None, "--annotations", exists=True, dir_okay=False, help="Explicit COCO annotations JSON"
+    ),
+    image_root: Path | None = typer.Option(
+        None, "--image-root", exists=True, file_okay=False, help="Explicit image root folder"
+    ),
+) -> None:
+    """Run Slicing-Aided Hyper Inference (SAHI) on a dataset split and export standard predictions."""
+    from src.infer.sahi import SahiConfig, export_sahi_predictions
+
+    config = SahiConfig(
+        slice_height=slice_size,
+        slice_width=slice_size,
+        overlap_height_ratio=overlap,
+        overlap_width_ratio=overlap,
+        perform_standard_pred=full_frame,
+        postprocess_type=postprocess,
+        postprocess_match_threshold=iou,
+        confidence_threshold=confidence,
+    )
+
+    try:
+        manifest = export_sahi_predictions(
+            weights=weights,
+            data=data,
+            output_dir=output_dir,
+            split=split,
+            config=config,
+            annotations=annotations,
+            image_root=image_root,
+            device=device,
+            smoke=smoke,
+            sample_limit=sample_limit,
+        )
+    except (ValueError, TypeError, KeyError, OSError, FileNotFoundError) as error:
+        ui.print_error(str(error))
+        raise typer.Exit(code=1) from error
+
+    ui.print_header(
+        "SAHI Sliced Inference",
+        f"{manifest['total_images']} images | slice {slice_size}x{slice_size} | overlap {overlap:.2f}",
+    )
+    lat = manifest["latency"]
+    ui.print_table(
+        "SAHI Execution Profile",
+        ["Metric", "Value"],
+        [
+            ["Images Processed", str(manifest["total_images"])],
+            ["Total Detections", str(manifest["total_detections"])],
+            ["Zero-Detection Images", str(len(manifest["zero_detection_image_ids"]))],
+            ["Mean Slicing Latency", f"{lat['mean_slice_ms']:.2f} ms"],
+            ["Mean Model Inference", f"{lat['mean_prediction_ms']:.2f} ms"],
+            ["Mean Postprocess / NMS", f"{lat['mean_postprocess_ms']:.2f} ms"],
+            ["Mean Total Latency", f"{lat['mean_total_ms']:.2f} ms"],
+            ["Throughput", f"{lat['throughput_fps']:.2f} FPS"],
+        ],
+    )
+    ui.print_success(f"Predictions saved to {output_dir / 'predictions.json'}")
+    ui.print_success(f"Run manifest saved to {output_dir / 'manifest.json'}")
+
+
+@infer_app.command("run")
+def infer_run(
+    weights: Path = typer.Option(
+        ..., "--weights", exists=True, dir_okay=False, help="Path to model weights (.pt)"
+    ),
+    data: Path = typer.Option(
+        ..., "--data", exists=True, dir_okay=False, help="Dataset YAML or COCO ground-truth JSON"
+    ),
+    output_dir: Path = typer.Option(
+        Path("runs/infer/high_res"), "--output-dir", "-o", help="Destination directory"
+    ),
+    split: str = typer.Option("val", "--split", help="Dataset split (train, val, test)"),
+    img_size: int = typer.Option(
+        800, "--img-size", min=32, help="Input resolution (e.g. 800, 1280, 1600)"
+    ),
+    confidence: float = typer.Option(
+        0.001, "--confidence", min=0.0, max=1.0, help="Confidence threshold"
+    ),
+    iou: float = typer.Option(0.70, "--iou", min=0.0, max=1.0, help="NMS IoU threshold"),
+    device: str = typer.Option("cpu", "--device", help="Computation device (cpu, 0, cuda:0)"),
+    smoke: bool = typer.Option(
+        False, "--smoke", help="Permit partial-vocabulary diagnostics"
+    ),
+    sample_limit: int | None = typer.Option(
+        None, "--sample-limit", min=1, help="Limit sample count for quick runs"
+    ),
+    annotations: Path | None = typer.Option(
+        None, "--annotations", exists=True, dir_okay=False, help="Explicit COCO annotations JSON"
+    ),
+    image_root: Path | None = typer.Option(
+        None, "--image-root", exists=True, file_okay=False, help="Explicit image root folder"
+    ),
+) -> None:
+    """Run standard full-image high-resolution inference on a dataset split."""
+    from src.infer.high_res import HighResConfig, export_high_res_predictions
+
+    config = HighResConfig(
+        image_size=img_size,
+        confidence_threshold=confidence,
+        iou_threshold=iou,
+    )
+
+    try:
+        manifest = export_high_res_predictions(
+            weights=weights,
+            data=data,
+            output_dir=output_dir,
+            split=split,
+            image_size=img_size,
+            config=config,
+            annotations=annotations,
+            image_root=image_root,
+            device=device,
+            smoke=smoke,
+            sample_limit=sample_limit,
+        )
+    except (ValueError, TypeError, KeyError, OSError, FileNotFoundError) as error:
+        ui.print_error(str(error))
+        raise typer.Exit(code=1) from error
+
+    ui.print_header(
+        "Standard High-Resolution Inference",
+        f"{manifest['total_images']} images | resolution {img_size}x{img_size}",
+    )
+    lat = manifest["latency"]
+    mem = manifest["memory"]
+    ui.print_table(
+        "High-Resolution Execution Profile",
+        ["Metric", "Value"],
+        [
+            ["Images Processed", str(manifest["total_images"])],
+            ["Total Detections", str(manifest["total_detections"])],
+            ["Zero-Detection Images", str(len(manifest["zero_detection_image_ids"]))],
+            ["Mean Preprocessing Latency", f"{lat['mean_preprocess_ms']:.2f} ms"],
+            ["Mean Forward Inference", f"{lat['mean_inference_ms']:.2f} ms"],
+            ["Mean Postprocess / NMS", f"{lat['mean_postprocess_ms']:.2f} ms"],
+            ["Mean Total Latency", f"{lat['mean_total_ms']:.2f} ms"],
+            ["Throughput", f"{lat['throughput_fps']:.2f} FPS"],
+            ["Peak Memory", f"{mem['peak_mb']:.2f} MB"],
+        ],
+    )
+    ui.print_success(f"Predictions saved to {output_dir / 'predictions.json'}")
+    ui.print_success(f"Run manifest saved to {output_dir / 'manifest.json'}")
+
+
+@infer_app.command("bench")
+def infer_bench(
+    weights: Path = typer.Option(
+        ..., "--weights", exists=True, dir_okay=False, help="Path to model weights (.pt)"
+    ),
+    data: Path = typer.Option(
+        Path("configs/aitod_mini.yaml"),
+        "--data",
+        exists=True,
+        dir_okay=False,
+        help="Dataset YAML",
+    ),
+    output_dir: Path = typer.Option(
+        Path("runs/infer/latency_bench"),
+        "--output-dir",
+        "-o",
+        help="Destination directory",
+    ),
+    resolutions: str = typer.Option(
+        "800,1280,1600", "--resolutions", help="Comma-separated image resolutions"
+    ),
+    with_sahi: bool = typer.Option(
+        False,
+        "--with-sahi/--no-sahi",
+        help="Include SAHI sliced inference in benchmark comparison",
+    ),
+    slice_size: int = typer.Option(512, "--slice-size", min=64, help="SAHI patch size"),
+    overlap: float = typer.Option(
+        0.20, "--overlap", min=0.0, max=0.9, help="SAHI patch overlap ratio"
+    ),
+    split: str = typer.Option("val", "--split", help="Dataset split"),
+    sample_limit: int | None = typer.Option(
+        None, "--sample-limit", min=1, help="Limit sample count for fast benchmarking"
+    ),
+    device: str = typer.Option("cpu", "--device", help="Computation device"),
+    smoke: bool = typer.Option(
+        False, "--smoke", help="Permit partial-vocabulary diagnostics"
+    ),
+    annotations: Path | None = typer.Option(
+        None, "--annotations", exists=True, dir_okay=False, help="Explicit COCO annotations JSON"
+    ),
+    image_root: Path | None = typer.Option(
+        None, "--image-root", exists=True, file_okay=False, help="Explicit image root folder"
+    ),
+) -> None:
+    """Benchmark latency, memory, and throughput trade-offs across resolutions and SAHI."""
+    from src.infer.high_res import benchmark_resolutions
+    from src.infer.sahi import SahiConfig, export_sahi_predictions
+
+    try:
+        res_list = [int(r.strip()) for r in resolutions.split(",") if r.strip()]
+    except ValueError as err:
+        ui.print_error(
+            f"Invalid resolutions argument '{resolutions}': expected comma-separated integers"
+        )
+        raise typer.Exit(code=1) from err
+
+    try:
+        summary = benchmark_resolutions(
+            weights=weights,
+            data=data,
+            output_dir=output_dir,
+            resolutions=res_list,
+            split=split,
+            annotations=annotations,
+            image_root=image_root,
+            device=device,
+            smoke=smoke,
+            sample_limit=sample_limit,
+        )
+
+        if with_sahi:
+            sahi_dir = output_dir / f"sahi_{slice_size}_ov{int(overlap * 100)}"
+            sahi_cfg = SahiConfig(
+                slice_height=slice_size,
+                slice_width=slice_size,
+                overlap_height_ratio=overlap,
+                overlap_width_ratio=overlap,
+            )
+            sahi_manifest = export_sahi_predictions(
+                weights=weights,
+                data=data,
+                output_dir=sahi_dir,
+                split=split,
+                config=sahi_cfg,
+                annotations=annotations,
+                image_root=image_root,
+                device=device,
+                smoke=smoke,
+            )
+            summary["sahi"] = {
+                "strategy": "sahi",
+                "slice_size": slice_size,
+                "overlap": overlap,
+                "latency": sahi_manifest["latency"],
+                "total_detections": sahi_manifest["total_detections"],
+            }
+            (output_dir / "resolution_benchmark.json").write_text(
+                json.dumps(summary, indent=2), encoding="utf-8"
+            )
+    except (ValueError, TypeError, KeyError, OSError, FileNotFoundError) as error:
+        ui.print_error(str(error))
+        raise typer.Exit(code=1) from error
+
+    ui.print_header(
+        "Inference Strategy & Latency Benchmark",
+        f"Device: {device} | Evaluated samples: {summary['sample_count']}",
+    )
+
+    headers = [
+        "Strategy / Resolution",
+        "Latency (ms)",
+        "Throughput (FPS)",
+        "Peak Mem (MB)",
+        "Detections",
+    ]
+    rows = []
+    for res_str, res_data in summary["resolutions"].items():
+        lat = res_data["latency"]
+        mem = res_data["memory"]
+        rows.append([
+            f"Full Frame ({res_str}x{res_str})",
+            f"{lat['mean_total_ms']:.2f}",
+            f"{lat['throughput_fps']:.2f}",
+            f"{mem['peak_mb']:.2f}",
+            str(res_data["total_detections"]),
+        ])
+
+    if "sahi" in summary:
+        s_data = summary["sahi"]
+        s_lat = s_data["latency"]
+        rows.append([
+            f"SAHI Sliced ({s_data['slice_size']}x{s_data['slice_size']}, ov {s_data['overlap']:.2f})",
+            f"{s_lat['mean_total_ms']:.2f}",
+            f"{s_lat['throughput_fps']:.2f}",
+            "N/A",
+            str(s_data["total_detections"]),
+        ])
+
+    ui.print_table("Latency & Throughput Trade-off Summary", headers, rows)
+    ui.print_success(f"Benchmark summary saved to {output_dir / 'resolution_benchmark.json'}")
 
 
 @bench_app.command("runtime")

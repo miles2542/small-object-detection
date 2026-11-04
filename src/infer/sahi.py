@@ -237,6 +237,7 @@ def export_sahi_predictions(
     image_ids: list[int] | None = None,
     device: str = "cpu",
     smoke: bool = False,
+    sample_limit: int | None = None,
 ) -> dict[str, Any]:
     """Execute SAHI sliced inference on a dataset split and export standard predictions JSON."""
     weights = Path(weights)
@@ -258,6 +259,8 @@ def export_sahi_predictions(
     images_by_id = {img["id"]: img for img in coco_gt["images"]}
 
     selected_ids = resolved_ids if image_ids is None else image_ids
+    if sample_limit is not None:
+        selected_ids = selected_ids[:sample_limit]
     if not selected_ids:
         raise ValueError("No images selected for inference")
 
@@ -305,14 +308,37 @@ def export_sahi_predictions(
 
     manifest = {
         "status": "complete",
+        "purpose": "smoke_only" if smoke else "evaluation",
         "strategy": "sahi_sliced",
         "weights": {"path": weights.as_posix(), "sha256": sha256(weights)},
         "annotations": {"path": resolved_ann.as_posix(), "sha256": sha256(resolved_ann)},
         "image_root": resolved_root.as_posix(),
+        "image_ids": selected_ids,
+        "images": [{"id": iid, "file_name": images_by_id[iid]["file_name"]} for iid in selected_ids],
+        "category_mapping": {
+            str(i): {"name": runner.category_map.get(i, ""), "category_id": cid}
+            for i, cid in runner.category_map.items()
+        },
+        "prediction_counts": detection_counts,
+        "detections": len(all_predictions),
+        "zero_detection_image_ids": [iid for iid in selected_ids if detection_counts[str(iid)] == 0],
+        "cap_hit_image_ids": [
+            iid
+            for iid in selected_ids
+            if detection_counts[str(iid)] == config.max_detections_per_image
+        ],
+        "predict_settings": {
+            "imgsz": 800,
+            "conf": config.confidence_threshold,
+            "iou": 0.70,
+            "max_det": config.max_detections_per_image,
+            "agnostic_nms": config.postprocess_class_agnostic,
+            "augment": False,
+            "rect": False,
+        },
         "sahi_config": asdict(config),
         "total_images": len(selected_ids),
         "total_detections": len(all_predictions),
-        "zero_detection_image_ids": [iid for iid in selected_ids if detection_counts[str(iid)] == 0],
         "latency": {
             "mean_slice_ms": round(mean_slice_ms, 2),
             "mean_prediction_ms": round(mean_pred_ms, 2),
@@ -320,6 +346,7 @@ def export_sahi_predictions(
             "mean_total_ms": round(mean_total_ms, 2),
             "throughput_fps": round(1000.0 / mean_total_ms, 2) if mean_total_ms > 0 else 0.0,
         },
+        "predictions_sha256": sha256(pred_path),
     }
 
     manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
