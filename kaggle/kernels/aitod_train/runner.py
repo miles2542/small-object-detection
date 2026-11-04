@@ -96,22 +96,29 @@ images_val_dir = data_dir / "images" / "val"
 
 labels_train_dir.mkdir(parents=True, exist_ok=True)
 labels_val_dir.mkdir(parents=True, exist_ok=True)
-images_train_dir.parent.mkdir(parents=True, exist_ok=True)
+images_train_dir.mkdir(parents=True, exist_ok=True)
+images_val_dir.mkdir(parents=True, exist_ok=True)
 
-# Create symlinks to input images without duplicating storage
-if not images_train_dir.exists():
-    try:
-        os.symlink(train_images_src, images_train_dir)
-        print("Created symlink for images/train")
-    except OSError:
-        shutil.copytree(train_images_src, images_train_dir)
 
-if not images_val_dir.exists():
-    try:
-        os.symlink(val_images_src, images_val_dir)
-        print("Created symlink for images/val")
-    except OSError:
-        shutil.copytree(val_images_src, images_val_dir)
+def link_image_files(src_dir: Path, dst_dir: Path) -> int:
+    """Link individual image files into destination directory to preserve working_dir label paths."""
+    print(f"Linking images from {src_dir} to {dst_dir}...")
+    src_files = list(src_dir.glob("*.png")) + list(src_dir.glob("*.jpg"))
+    linked = 0
+    for f in src_files:
+        target = dst_dir / f.name
+        if not target.exists():
+            try:
+                os.link(f, target)
+            except OSError:
+                shutil.copyfile(f, target)
+        linked += 1
+    print(f"Successfully linked {linked} images in {dst_dir.name}")
+    return linked
+
+
+link_image_files(train_images_src, images_train_dir)
+link_image_files(val_images_src, images_val_dir)
 
 
 def sanitize_and_convert_coco(
