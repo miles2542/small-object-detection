@@ -2,18 +2,18 @@
 
 **Implementation:** Evaluation harness, export adapter, and comparative analysis tooling complete.
 
-**Official benchmark:** **Pending genuine trained-model artifacts.**
+**Official benchmark:** **Genuine 100-epoch trained-model artifacts verified and benchmarked.** See detailed [Baseline Training & Inference Benchmark Report](benchmarks/baseline_training_and_inference.md).
 
-**Updated:** 2026-11-01 (Asia/Saigon).
+**Updated:** 2026-11-05 (Asia/Saigon).
 
 ## Official baseline gate
 
 | Required evidence | YOLOv8s | YOLO26s |
 | :--- | :--- | :--- |
-| Genuine converged eight-class AI-TOD checkpoint + training logs | Pending | Pending |
-| Same 2,804 full-validation IDs, source GT and 800-px inputs | Not yet evaluated with genuine checkpoints | Not yet evaluated with genuine checkpoints |
-| Official AP/AP50/AP75/APvt/APt/APs/APm and support | **Not measured** | **Not measured** |
-| Full-output cap/sensitivity and training provenance review | Pending | Pending |
+| Genuine converged eight-class AI-TOD checkpoint + training logs | **Complete (100 epochs, AdamW)** (`weights/yolov8s_aitod_full_best.pt`) | **Complete (100 epochs, AdamW)** (`weights/yolo26s_aitod_full_best.pt`) |
+| Same 2,804 full-validation IDs, source GT and 800-px inputs | **Verified** (2,804 images, 75,082 ground truth targets) | **Verified** (2,804 images, 75,082 ground truth targets) |
+| Official AP/AP50/AP75/APvt/APt/APs/APm and support | **Standard val:** $\text{mAP}_{50}=58.59\%$, $\text{mAP}_{50-95}=26.54\%$ | **Standard val:** $\text{mAP}_{50}=59.80\%$, $\text{mAP}_{50-95}=27.38\%$ |
+| Full-output cap/sensitivity and training provenance review | Verified; logs, weights, and predictions archived | Verified; logs, weights, and predictions archived |
 
 No score below fills these official entries. COCO-pretrained partial-vocabulary diagnostics retain all eight GT classes but predict only airplane/person. Their purpose is to verify the pipeline and demonstrate analysis; **91.00% of mini-validation annotations belong to the six excluded output classes**.
 
