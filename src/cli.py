@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 
 import typer
@@ -32,6 +33,9 @@ app.add_typer(eval_app, name="eval")
 
 infer_app = typer.Typer(help="Inference strategies: High-resolution and SAHI.")
 app.add_typer(infer_app, name="infer")
+
+model_app = typer.Typer(help="Model architecture inspection and verification.")
+app.add_typer(model_app, name="model")
 
 
 @app.callback()
@@ -823,6 +827,70 @@ def train_run(
         nwd_ratio=nwd_ratio,
         nwd_constant=nwd_constant,
     )
+
+
+@model_app.command("info")
+def model_info(
+    config: Path = typer.Option(..., "--config", "-c", help="Model architecture YAML"),
+    imgsz: int = typer.Option(800, "--imgsz", help="Input resolution used for the measurements"),
+    num_classes: int = typer.Option(8, "--num-classes", help="Number of detection classes"),
+) -> None:
+    """Print architecture summary: head count, strides, parameters, FLOPs and receptive fields."""
+    from src.models.builder import build_model, measure_receptive_fields, verify_model
+
+    model = build_model(config, num_classes=num_classes)
+    report = verify_model(model, imgsz=imgsz)
+    fields = measure_receptive_fields(model, imgsz=imgsz)
+
+    ui.print_header("Model Info", str(config))
+    ui.print_table(
+        title="Architecture",
+        columns=["Property", "Value"],
+        rows=[
+            ["Detection heads", str(report.head_count)],
+            ["Strides", ", ".join(str(s) for s in report.strides)],
+            ["End-to-end head", "yes" if report.end2end else "no"],
+            ["Classes", str(report.num_classes)],
+            ["Parameters", f"{report.parameters:,}"],
+            [f"GFLOPs @ {imgsz}", f"{report.gflops:.1f}"],
+        ],
+    )
+    ui.print_table(
+        title="Per-scale head inputs",
+        columns=["Stride", "Feature map", "Receptive field (px)"],
+        rows=[
+            [str(s), "x".join(str(d) for d in shape[1:]), str(rf)]
+            for s, shape, rf in zip(report.strides, report.feature_shapes, fields, strict=True)
+        ],
+    )
+
+
+@model_app.command("verify")
+def model_verify(
+    config: Path = typer.Option(..., "--config", "-c", help="Model architecture YAML"),
+    imgsz: int = typer.Option(800, "--imgsz", help="Dummy input resolution"),
+    num_classes: int = typer.Option(8, "--num-classes", help="Number of detection classes"),
+) -> None:
+    """Run a dummy forward pass and check feature-map shapes against the head strides."""
+    from src.models.builder import build_model, verify_model
+
+    model = build_model(config, num_classes=num_classes)
+    try:
+        report = verify_model(model, imgsz=imgsz)
+    except ValueError as exc:
+        ui.print_error(str(exc))
+        raise typer.Exit(code=1) from exc
+
+    names = [f"P{round(math.log2(s))}" for s in report.strides]
+    ui.print_table(
+        title=f"Forward pass ({imgsz}x{imgsz})",
+        columns=["Scale", "Stride", "Feature map (N,C,H,W)"],
+        rows=[
+            [name, str(s), str(shape)]
+            for name, s, shape in zip(names, report.strides, report.feature_shapes, strict=True)
+        ],
+    )
+    ui.print_success(f"{report.head_count}-scale head verified at {imgsz}x{imgsz}")
 
 
 @data_app.command("summary")
