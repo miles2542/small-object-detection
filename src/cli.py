@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 
 import typer
@@ -32,6 +33,9 @@ app.add_typer(eval_app, name="eval")
 
 infer_app = typer.Typer(help="Inference strategies: High-resolution and SAHI.")
 app.add_typer(infer_app, name="infer")
+
+model_app = typer.Typer(help="Model architecture inspection and verification.")
+app.add_typer(model_app, name="model")
 
 
 @app.callback()
@@ -781,9 +785,35 @@ def train_run(
         "--workers",
         help="Number of dataloader workers (default: 2)",
     ),
+    pretrained: str | None = typer.Option(
+        None,
+        "--pretrained",
+        help="Checkpoint to transfer matching weights from when --model is an architecture YAML",
+    ),
+    nwd: bool = typer.Option(
+        False,
+        "--nwd/--no-nwd",
+        help="Train with the hybrid CIoU/NWD box loss instead of CIoU",
+    ),
+    nwd_ratio: float | None = typer.Option(
+        None,
+        "--nwd-ratio",
+        min=0.0,
+        max=1.0,
+        help="CIoU weight alpha of the hybrid box loss, needs --nwd (default 0.5; 0 = pure NWD)",
+    ),
+    nwd_constant: float | None = typer.Option(
+        None,
+        "--nwd-constant",
+        min=1e-6,
+        help="NWD normalization constant C in pixels, needs --nwd (default 12.8)",
+    ),
 ) -> None:
-    """Train baseline detection model (YOLOv8s or YOLO26s) on dataset configuration."""
+    """Train a detection model (YOLOv8s, YOLO26s or a P2 architecture YAML) on a dataset config."""
     from src.models.train import train_baseline
+
+    if not nwd and (nwd_ratio is not None or nwd_constant is not None):
+        raise typer.BadParameter("--nwd-ratio and --nwd-constant only apply together with --nwd")
 
     train_baseline(
         model=model,
@@ -795,7 +825,79 @@ def train_run(
         save_dir=save_dir,
         fraction=fraction,
         workers=workers,
+        pretrained=pretrained,
+        nwd=nwd,
+        nwd_ratio=0.5 if nwd_ratio is None else nwd_ratio,
+        nwd_constant=12.8 if nwd_constant is None else nwd_constant,
     )
+
+
+@model_app.command("info")
+def model_info(
+    config: Path = typer.Option(..., "--config", "-c", help="Model architecture YAML"),
+    imgsz: int = typer.Option(800, "--imgsz", help="Input resolution used for the measurements"),
+    num_classes: int = typer.Option(8, "--num-classes", help="Number of detection classes"),
+) -> None:
+    """Print architecture summary: head count, strides, parameters, FLOPs and receptive fields."""
+    from src.models.builder import build_model, measure_receptive_fields, verify_model
+
+    model = build_model(config, num_classes=num_classes)
+    try:
+        report = verify_model(model, imgsz=imgsz)
+    except ValueError as exc:
+        ui.print_error(str(exc))
+        raise typer.Exit(code=1) from exc
+    fields = measure_receptive_fields(model, imgsz=imgsz)
+
+    ui.print_header("Model Info", str(config))
+    ui.print_table(
+        title="Architecture",
+        columns=["Property", "Value"],
+        rows=[
+            ["Detection heads", str(report.head_count)],
+            ["Strides", ", ".join(str(s) for s in report.strides)],
+            ["End-to-end head", "yes" if report.end2end else "no"],
+            ["Classes", str(report.num_classes)],
+            ["Parameters", f"{report.parameters:,}"],
+            [f"GFLOPs @ {imgsz}", f"{report.gflops:.1f}"],
+        ],
+    )
+    ui.print_table(
+        title="Per-scale head inputs",
+        columns=["Stride", "Feature map", "Receptive field (px)"],
+        rows=[
+            [str(s), "x".join(str(d) for d in shape[1:]), str(rf)]
+            for s, shape, rf in zip(report.strides, report.feature_shapes, fields, strict=True)
+        ],
+    )
+
+
+@model_app.command("verify")
+def model_verify(
+    config: Path = typer.Option(..., "--config", "-c", help="Model architecture YAML"),
+    imgsz: int = typer.Option(800, "--imgsz", help="Dummy input resolution"),
+    num_classes: int = typer.Option(8, "--num-classes", help="Number of detection classes"),
+) -> None:
+    """Run a dummy forward pass and check feature-map shapes against the head strides."""
+    from src.models.builder import build_model, verify_model
+
+    model = build_model(config, num_classes=num_classes)
+    try:
+        report = verify_model(model, imgsz=imgsz)
+    except ValueError as exc:
+        ui.print_error(str(exc))
+        raise typer.Exit(code=1) from exc
+
+    names = [f"P{round(math.log2(s))}" for s in report.strides]
+    ui.print_table(
+        title=f"Forward pass ({imgsz}x{imgsz})",
+        columns=["Scale", "Stride", "Feature map (N,C,H,W)"],
+        rows=[
+            [name, str(s), str(shape)]
+            for name, s, shape in zip(names, report.strides, report.feature_shapes, strict=True)
+        ],
+    )
+    ui.print_success(f"{report.head_count}-scale head verified at {imgsz}x{imgsz}")
 
 
 @data_app.command("summary")
