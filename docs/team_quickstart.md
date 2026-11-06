@@ -139,6 +139,27 @@ sod eval run --weights runs/train/yolov8s_aitod_mini/weights/best.pt --data conf
 sod eval compare --run baseline=runs/eval/yolov8s_val --run sahi=runs/eval/yolov8s_sahi --output-dir runs/eval/comparison
 ```
 
+### Profile E: P2 stride-4 head and NWD box loss
+
+`configs/models/yolov8s-p2.yaml` and `configs/models/yolo26s-p2.yaml` add a fourth detection scale at stride 4 (200x200 at 800 px input). `--nwd` replaces the IoU term of the box loss with `alpha * CIoU + (1 - alpha) * NWD`, evaluated in pixel units.
+
+```powershell
+# Inspect and verify an architecture (strides, parameters, FLOPs, receptive fields, feature-map shapes)
+sod model info --config configs/models/yolov8s-p2.yaml
+sod model verify --config configs/models/yolov8s-p2.yaml --imgsz 800
+
+# P2 head only, backbone initialised from the matching baseline checkpoint
+sod train run --model configs/models/yolov8s-p2.yaml --pretrained yolov8s --config configs/aitod_full.yaml --epochs 100
+
+# P2 head + hybrid NWD loss (--nwd-ratio is the CIoU weight alpha: 0 = pure NWD, 1 = pure CIoU)
+sod train run --model configs/models/yolo26s-p2.yaml --pretrained yolo26s --config configs/aitod_full.yaml --epochs 100 --nwd --nwd-ratio 0.5 --nwd-constant 12.8
+
+# NWD loss on the unmodified baseline architecture
+sod train run --model yolov8s --config configs/aitod_full.yaml --epochs 100 --nwd
+```
+
+`--pretrained` copies every tensor whose name and shape match, which covers the unchanged backbone; the P2 neck and head start from fresh initialisation. Checkpoints are standard Ultralytics `.pt` files and evaluate with `sod eval run` unchanged.
+
 ---
 
 ## 5. Next tasks & member assignments
