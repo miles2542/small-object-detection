@@ -115,6 +115,7 @@ class HybridBoxLoss(nn.Module):
         self.reduction = reduction
 
     def forward(self, pred: Tensor, target: Tensor) -> Tensor:
+        pred, target = torch.broadcast_tensors(pred, target)
         loss = pred.new_zeros(pred.shape[:-1])
         if self.alpha > 0.0:
             iou = bbox_iou(pred, target, xywh=self.box_format == "xywh", CIoU=True)

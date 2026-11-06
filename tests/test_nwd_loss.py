@@ -219,6 +219,15 @@ class TestLossModules(unittest.TestCase):
         )
         torch.testing.assert_close(xywh, xyxy, atol=1e-5, rtol=1e-5)
 
+    def test_hybrid_broadcasts_one_box_against_many(self) -> None:
+        single = self.pred[:1]
+        loss = HybridBoxLoss(alpha=0.5, reduction="none")(single, self.target)
+        self.assertEqual(tuple(loss.shape), (3,))
+        expected = HybridBoxLoss(alpha=0.5, reduction="none")(
+            single.expand_as(self.target), self.target
+        )
+        torch.testing.assert_close(loss, expected)
+
     def test_hybrid_rejects_invalid_alpha(self) -> None:
         for alpha in (-0.1, 1.1):
             with self.assertRaises(ValueError):
