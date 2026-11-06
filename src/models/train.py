@@ -45,6 +45,8 @@ def detect_optimal_batch_size(device: str, requested_batch: int | None = None) -
 def resolve_model_weights(model_identifier: str) -> str:
     """Resolve model weights file from identifier, local weights dir, or download name."""
     clean_id = model_identifier.lower().strip()
+    if clean_id.endswith((".yaml", ".yml")):
+        return model_identifier  # architecture config, built from scratch
     target_filename = SUPPORTED_MODELS.get(clean_id, f"{clean_id}.pt" if not clean_id.endswith(".pt") else clean_id)
 
     # 1. Check local pretrained weights directory
@@ -76,12 +78,22 @@ def train_baseline(
     save_dir: Path | str | None = None,
     fraction: float = 1.0,
     workers: int = 0,
+    pretrained: str | None = None,
+    nwd: bool = False,
+    nwd_ratio: float = 0.5,
+    nwd_constant: float = 12.8,
 ) -> dict[str, Any]:
-    """Execute training run for a baseline model on configured dataset."""
+    """Execute training run for a baseline model on configured dataset.
+
+    ``model`` may be an architecture YAML (e.g. a P2 config); ``pretrained`` then transfers the
+    matching backbone tensors from a checkpoint. ``nwd`` swaps the box IoU term for the hybrid
+    CIoU/NWD loss, where ``nwd_ratio`` is the CIoU weight (0 = pure NWD).
+    """
     actual_device = detect_optimal_device(device)
     actual_batch = detect_optimal_batch_size(actual_device, batch_size)
     weights_path = resolve_model_weights(model)
     config_path = Path(config)
+    model_name = Path(model).stem if weights_path.lower().endswith((".yaml", ".yml")) else model
 
     if not config_path.exists():
         raise FileNotFoundError(f"Dataset config not found at: {config_path}")
@@ -93,11 +105,19 @@ def train_baseline(
 
     split_tag = "full" if "full" in config_path.stem else "mini"
     actual_save_dir = (
-        Path(save_dir) if save_dir else Path(f"runs/train/{model.replace('.pt', '')}_aitod_{split_tag}")
+        Path(save_dir) if save_dir else Path(f"runs/train/{model_name.replace('.pt', '')}_aitod_{split_tag}")
     )
     actual_save_dir.parent.mkdir(parents=True, exist_ok=True)
 
     yolo_model = YOLO(weights_path)
+    if pretrained:
+        yolo_model.load(resolve_model_weights(pretrained))
+
+    train_kwargs: dict[str, Any] = {}
+    if nwd:
+        from src.models.loss_bridge import make_nwd_trainer
+
+        train_kwargs["trainer"] = make_nwd_trainer(nwd_ratio=nwd_ratio, nwd_constant=nwd_constant)
 
     results = yolo_model.train(
         data=str(config_path),
@@ -112,6 +132,7 @@ def train_baseline(
         plots=True,
         exist_ok=True,
         verbose=True,
+        **train_kwargs,
     )
 
     best_weights = actual_save_dir / "weights" / "best.pt"

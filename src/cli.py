@@ -781,8 +781,31 @@ def train_run(
         "--workers",
         help="Number of dataloader workers (default: 2)",
     ),
+    pretrained: str | None = typer.Option(
+        None,
+        "--pretrained",
+        help="Checkpoint to transfer matching weights from when --model is an architecture YAML",
+    ),
+    nwd: bool = typer.Option(
+        False,
+        "--nwd/--no-nwd",
+        help="Train with the hybrid CIoU/NWD box loss instead of CIoU",
+    ),
+    nwd_ratio: float = typer.Option(
+        0.5,
+        "--nwd-ratio",
+        min=0.0,
+        max=1.0,
+        help="CIoU weight alpha of the hybrid box loss (0 = pure NWD, 1 = pure CIoU)",
+    ),
+    nwd_constant: float = typer.Option(
+        12.8,
+        "--nwd-constant",
+        min=1e-6,
+        help="NWD normalization constant C in pixels",
+    ),
 ) -> None:
-    """Train baseline detection model (YOLOv8s or YOLO26s) on dataset configuration."""
+    """Train a detection model (YOLOv8s, YOLO26s or a P2 architecture YAML) on a dataset config."""
     from src.models.train import train_baseline
 
     train_baseline(
@@ -795,6 +818,10 @@ def train_run(
         save_dir=save_dir,
         fraction=fraction,
         workers=workers,
+        pretrained=pretrained,
+        nwd=nwd,
+        nwd_ratio=nwd_ratio,
+        nwd_constant=nwd_constant,
     )
 
 
