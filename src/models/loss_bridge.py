@@ -21,6 +21,9 @@ from ultralytics.utils.loss import BboxLoss
 
 from src.losses.nwd import DEFAULT_HYBRID_ALPHA, DEFAULT_NWD_CONSTANT, HybridBoxLoss
 
+# Captured at import so the class-level patch installed during training can always be undone.
+_ORIGINAL_INIT_CRITERION = DetectionModel.init_criterion
+
 
 class NWDBboxLoss(BboxLoss):
     """``BboxLoss`` whose box term is ``alpha * CIoU + (1 - alpha) * NWD`` in pixel units."""
@@ -65,8 +68,9 @@ class NWDBboxLoss(BboxLoss):
         fg = fg_mask.nonzero(as_tuple=True)
         weight = target_scores[fg].sum(-1)
         # Boxes arrive in feature-grid units; NWD's constant is defined in pixels.
-        scale = stride[fg[1]]
-        box = self.box_loss(pred_bboxes[fg] * scale, target_bboxes[fg] * scale)
+        # Mixed precision hands over half-precision boxes; pixel-scaled coordinates need float32.
+        scale = stride[fg[1]].float()
+        box = self.box_loss(pred_bboxes[fg].float() * scale, target_bboxes[fg].float() * scale)
         loss_box = (box * weight).sum() / target_scores_sum
         return loss_box, loss_dfl
 
@@ -113,15 +117,18 @@ def make_nwd_trainer(
 
         def set_model_attributes(self) -> None:
             super().set_model_attributes()
-            original = DetectionModel.__dict__.get("_sod_original_init_criterion")
-            if original is None:
-                original = DetectionModel.init_criterion
-                DetectionModel._sod_original_init_criterion = original  # type: ignore[attr-defined]
             alpha, constant = self.alpha, self.constant
 
             def init_criterion(model: DetectionModel) -> Any:
-                return apply_nwd_loss(original(model), alpha, constant)
+                return apply_nwd_loss(_ORIGINAL_INIT_CRITERION(model), alpha, constant)
 
             DetectionModel.init_criterion = init_criterion  # type: ignore[method-assign]
+
+        def train(self, *args: Any, **kwargs: Any) -> Any:
+            # The patch is class-wide, so it must not outlive this run.
+            try:
+                return super().train(*args, **kwargs)
+            finally:
+                DetectionModel.init_criterion = _ORIGINAL_INIT_CRITERION  # type: ignore[method-assign]
 
     return NWDDetectionTrainer

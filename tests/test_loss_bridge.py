@@ -2,16 +2,29 @@
 
 from __future__ import annotations
 
+import tempfile
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
+import cv2
+import numpy as np
 import torch
+from ultralytics import YOLO
 from ultralytics.models.yolo.detect import DetectionTrainer
+from ultralytics.nn.tasks import DetectionModel
 from ultralytics.utils.loss import BboxLoss
 
 from src.losses.nwd import nwd_score
 from src.models.builder import build_model
-from src.models.loss_bridge import NWDBboxLoss, apply_nwd_loss, make_nwd_trainer
+from src.models.loss_bridge import (
+    _ORIGINAL_INIT_CRITERION,
+    NWDBboxLoss,
+    apply_nwd_loss,
+    make_nwd_trainer,
+)
+from src.models.train import resolve_model_weights
 
 REG_MAX = 16
 
@@ -144,6 +157,70 @@ class TestApplyNwdLoss(unittest.TestCase):
                 self.assertTrue(torch.isfinite(nwd_loss).all().item())
                 self.assertNotEqual(base_loss[0].item(), nwd_loss[0].item())
                 torch.testing.assert_close(base_loss[1:], nwd_loss[1:])
+
+
+class TestNwdTrainerRun(unittest.TestCase):
+    """One tiny CPU epoch through the real trainer."""
+
+    def _write_toy_dataset(self, root: Path) -> Path:
+        rng = np.random.default_rng(0)
+        for split in ("train", "val"):
+            (root / "images" / split).mkdir(parents=True)
+            (root / "labels" / split).mkdir(parents=True)
+            for i in range(2):
+                image = rng.integers(0, 255, (64, 64, 3), dtype=np.uint8)
+                cv2.imwrite(str(root / "images" / split / f"{i}.jpg"), image)
+                (root / "labels" / split / f"{i}.txt").write_text(
+                    "0 0.30 0.30 0.20 0.20\n1 0.70 0.60 0.15 0.25\n", encoding="utf-8"
+                )
+        yaml_path = root / "toy.yaml"
+        yaml_path.write_text(
+            f"path: {root.as_posix()}\ntrain: images/train\nval: images/val\n"
+            "names:\n  0: a\n  1: b\n",
+            encoding="utf-8",
+        )
+        return yaml_path
+
+    def test_nwd_is_used_then_original_criterion_is_restored(self) -> None:
+        calls: list[int] = []
+        original_forward = NWDBboxLoss.forward
+
+        def counting_forward(self: NWDBboxLoss, *args, **kwargs):
+            calls.append(1)
+            return original_forward(self, *args, **kwargs)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            data = self._write_toy_dataset(Path(tmp))
+            model = YOLO("configs/models/yolov8s-p2.yaml")
+            with patch.object(NWDBboxLoss, "forward", counting_forward):
+                model.train(
+                    data=str(data),
+                    epochs=1,
+                    batch=2,
+                    imgsz=64,
+                    device="cpu",
+                    workers=0,
+                    plots=False,
+                    val=False,
+                    project=tmp,
+                    name="run",
+                    verbose=False,
+                    trainer=make_nwd_trainer(nwd_ratio=0.3, nwd_constant=9.0),
+                )
+
+        self.assertGreater(len(calls), 0)
+        self.assertIs(DetectionModel.init_criterion, _ORIGINAL_INIT_CRITERION)
+        fresh = build_model("configs/models/yolov8s-p2.yaml").model
+        fresh.args = SimpleNamespace(box=7.5, cls=0.5, dfl=1.5, epochs=1)
+        self.assertNotIsInstance(fresh.init_criterion().bbox_loss, NWDBboxLoss)
+
+
+class TestResolveModelWeights(unittest.TestCase):
+    def test_architecture_yaml_is_returned_unchanged(self) -> None:
+        self.assertEqual(
+            resolve_model_weights("configs/models/yolov8s-p2.yaml"),
+            "configs/models/yolov8s-p2.yaml",
+        )
 
 
 class TestMakeNwdTrainer(unittest.TestCase):
