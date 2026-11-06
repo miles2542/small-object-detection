@@ -105,6 +105,24 @@ class TestModelCli(unittest.TestCase):
         self.assertIn("4, 8, 16, 32", result.output)
         self.assertIn("Receptive field", result.output)
 
+    def test_non_multiple_of_stride_is_a_clean_error(self) -> None:
+        for command in ("verify", "info"):
+            with self.subTest(command=command):
+                result = self.runner.invoke(
+                    app,
+                    ["model", command, "--config", str(P2_CONFIGS["yolov8s-p2"]), "--imgsz", "810"],
+                )
+                self.assertEqual(result.exit_code, 1)
+                self.assertIn("multiple of 32", result.output)
+                self.assertNotIsInstance(result.exception, RuntimeError)
+
+    def test_nwd_options_require_nwd_flag(self) -> None:
+        for option in (["--nwd-ratio", "0.0"], ["--nwd-constant", "10"]):
+            with self.subTest(option=option):
+                result = self.runner.invoke(app, ["train", "run", *option])
+                self.assertNotEqual(result.exit_code, 0)
+                self.assertIn("--nwd", result.output)
+
     def test_model_verify(self) -> None:
         result = self.runner.invoke(
             app, ["model", "verify", "--config", str(P2_CONFIGS["yolo26s-p2"]), "--imgsz", "800"]

@@ -795,22 +795,25 @@ def train_run(
         "--nwd/--no-nwd",
         help="Train with the hybrid CIoU/NWD box loss instead of CIoU",
     ),
-    nwd_ratio: float = typer.Option(
-        0.5,
+    nwd_ratio: float | None = typer.Option(
+        None,
         "--nwd-ratio",
         min=0.0,
         max=1.0,
-        help="CIoU weight alpha of the hybrid box loss (0 = pure NWD, 1 = pure CIoU)",
+        help="CIoU weight alpha of the hybrid box loss, needs --nwd (default 0.5; 0 = pure NWD)",
     ),
-    nwd_constant: float = typer.Option(
-        12.8,
+    nwd_constant: float | None = typer.Option(
+        None,
         "--nwd-constant",
         min=1e-6,
-        help="NWD normalization constant C in pixels",
+        help="NWD normalization constant C in pixels, needs --nwd (default 12.8)",
     ),
 ) -> None:
     """Train a detection model (YOLOv8s, YOLO26s or a P2 architecture YAML) on a dataset config."""
     from src.models.train import train_baseline
+
+    if not nwd and (nwd_ratio is not None or nwd_constant is not None):
+        raise typer.BadParameter("--nwd-ratio and --nwd-constant only apply together with --nwd")
 
     train_baseline(
         model=model,
@@ -824,8 +827,8 @@ def train_run(
         workers=workers,
         pretrained=pretrained,
         nwd=nwd,
-        nwd_ratio=nwd_ratio,
-        nwd_constant=nwd_constant,
+        nwd_ratio=0.5 if nwd_ratio is None else nwd_ratio,
+        nwd_constant=12.8 if nwd_constant is None else nwd_constant,
     )
 
 
@@ -839,7 +842,11 @@ def model_info(
     from src.models.builder import build_model, measure_receptive_fields, verify_model
 
     model = build_model(config, num_classes=num_classes)
-    report = verify_model(model, imgsz=imgsz)
+    try:
+        report = verify_model(model, imgsz=imgsz)
+    except ValueError as exc:
+        ui.print_error(str(exc))
+        raise typer.Exit(code=1) from exc
     fields = measure_receptive_fields(model, imgsz=imgsz)
 
     ui.print_header("Model Info", str(config))

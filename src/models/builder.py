@@ -69,10 +69,13 @@ def _capture_head_inputs(model: YOLO, x: torch.Tensor) -> list[torch.Tensor]:
 def verify_model(model: YOLO, imgsz: int = 800) -> ModelReport:
     """Forward a dummy image and check that feature maps match the head strides."""
     net = model.model.eval()
+    head = net.model[-1]
+    max_stride = int(head.stride.max())
+    if imgsz <= 0 or imgsz % max_stride != 0:
+        raise ValueError(f"imgsz must be a positive multiple of {max_stride}, got {imgsz}")
     with torch.no_grad():
         feats = _capture_head_inputs(model, torch.zeros((1, 3, imgsz, imgsz)))
 
-    head = net.model[-1]
     strides = [int(s) for s in head.stride.tolist()]
     shapes = [tuple(f.shape) for f in feats]
     if len(shapes) != len(strides):
