@@ -158,7 +158,7 @@ sod train run --model configs/models/yolo26s-p2.yaml --pretrained yolo26s --conf
 sod train run --model yolov8s --config configs/aitod_full.yaml --epochs 100 --nwd
 ```
 
-`--pretrained` copies every tensor whose name and shape match, which covers the unchanged backbone; the P2 neck and head start from fresh initialisation. Checkpoints are standard Ultralytics `.pt` files and evaluate with `sod eval run` unchanged.
+`--pretrained` copies every tensor whose name and shape match, which covers the unchanged backbone; the P2 neck and head start from fresh initialisation. Checkpoints are standard Ultralytics `.pt` files and evaluate with `sod eval run` unchanged. `--nwd-ratio` and `--nwd-constant` only take effect together with `--nwd`. The NWD setting is not stored in the checkpoint, so resuming a run through plain Ultralytics (`resume=True`) falls back to CIoU.
 
 ---
 
