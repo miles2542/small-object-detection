@@ -64,16 +64,33 @@ class PredictionExportTests(unittest.TestCase):
 
     def test_invalid_results_are_rejected(self):
         for values in [
-            [64, 32, 64, 96, 0.75, 4],
-            [-1, 32, 192, 96, 0.75, 4],
             [64, 32, 192, 96, float("nan"), 4],
-            [64, 32, 192, 96, 1.2, 4],
             [64, 32, 192, 96, 0.75, 2],
+            [64, 32, 192, 96, 0.75, 4.5],
         ]:
             with self.subTest(values=values), self.assertRaises(ValueError):
                 results_to_coco(
                     result(boxes=[values]), {"id": 91, "width": 640, "height": 320}, {4: 17}
                 )
+
+    def test_boundary_clamping_and_degenerate_filtering(self):
+        # Bounding boxes extending outside image frame are clamped
+        sample = result(boxes=[[-5.0, 32.0, 700.0, 96.0, 0.75, 4]])
+        rows = results_to_coco(sample, {"id": 91, "width": 640, "height": 320}, {4: 17})
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["bbox"], [0.0, 32.0, 640.0, 64.0])
+
+        # Zero-area and inverted boxes are safely filtered
+        sample_degenerate = result(
+            boxes=[
+                [64.0, 32.0, 64.0, 96.0, 0.75, 4],
+                [100.0, 50.0, 80.0, 90.0, 0.8, 4],
+            ]
+        )
+        rows_degenerate = results_to_coco(
+            sample_degenerate, {"id": 91, "width": 640, "height": 320}, {4: 17}
+        )
+        self.assertEqual(rows_degenerate, [])
 
     def test_manifest_keeps_empty_images_and_duplicate_stems(self):
         self.run_fixture(empty=False)

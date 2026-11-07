@@ -62,15 +62,18 @@ def results_to_coco(result, image: dict, mapping: dict) -> list[dict]:
     ):
         if not all(math.isfinite(v) for v in box + [score, category]):
             raise ValueError("Non-finite prediction")
-        x1, y1, x2, y2 = box
-        if (
-            category != int(category)
-            or int(category) not in mapping
-            or not 0 <= score <= 1
-            or not 0 <= x1 < x2 <= image["width"]
-            or not 0 <= y1 < y2 <= image["height"]
-        ):
-            raise ValueError("Invalid prediction class, confidence or original-image box")
+        if category != int(category) or int(category) not in mapping:
+            raise ValueError("Invalid prediction class")
+
+        x1 = max(0.0, min(float(image["width"]), float(box[0])))
+        y1 = max(0.0, min(float(image["height"]), float(box[1])))
+        x2 = max(0.0, min(float(image["width"]), float(box[2])))
+        y2 = max(0.0, min(float(image["height"]), float(box[3])))
+        score = max(0.0, min(1.0, float(score)))
+
+        if x2 <= x1 or y2 <= y1:
+            continue
+
         rows.append(
             {
                 "image_id": image["id"],
