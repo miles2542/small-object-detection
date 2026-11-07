@@ -26,6 +26,7 @@ wandb/
 mlruns/
 lightning_logs/
 kaggle_logs/
+evaluation_results_consolidated/
 *.log
 
 # Internal Dev
