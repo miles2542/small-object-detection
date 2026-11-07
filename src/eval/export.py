@@ -7,11 +7,23 @@ import math
 import platform
 import subprocess
 import time
-from importlib.metadata import version
 from pathlib import Path
 
 from src.eval.audit import sha256
 from src.eval.protocol import evaluation_protocol
+
+
+def _get_git_revision() -> str:
+    """Safely obtain the current git commit SHA, falling back to 'unknown' if outside git."""
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=Path(__file__).resolve().parent,
+            stderr=subprocess.DEVNULL,
+            text=True,
+        ).strip()
+    except (subprocess.CalledProcessError, FileNotFoundError, OSError):
+        return "unknown"
 
 
 def category_mapping(model_names: dict | list, categories: list[dict], smoke: bool = False) -> dict:
@@ -206,10 +218,7 @@ def export_predictions(
             "torch_num_threads": torch.get_num_threads(),
             "torch_build": torch.__version__,
             "python": platform.python_version(),
-            "versions": {p: version(p) for p in ["torch", "ultralytics", "numpy"]},
-            "repository_revision": subprocess.check_output(
-                ["git", "rev-parse", "HEAD"], text=True
-            ).strip(),
+            "repository_revision": _get_git_revision(),
             "export_code_sha256": sha256(Path(__file__)),
             "predictions_sha256": sha256(temporary),
         }
