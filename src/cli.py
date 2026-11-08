@@ -37,6 +37,10 @@ app.add_typer(infer_app, name="infer")
 model_app = typer.Typer(help="Model architecture inspection and verification.")
 app.add_typer(model_app, name="model")
 
+from src.postprocess.cli import postprocess_app
+
+app.add_typer(postprocess_app, name="postprocess")
+
 
 @app.callback()
 def main_callback() -> None:
