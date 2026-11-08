@@ -157,3 +157,62 @@ def test_all_six_tide_modes_are_exported(tmp_path: Path) -> None:
         "Bkg": 1,
         "Miss": 2,
     }
+
+
+def test_manifest_omits_predict_settings_and_zero_counts(tmp_path: Path) -> None:
+    coco = {
+        "images": [
+            {"id": 1, "file_name": "f1.png", "width": 100, "height": 100},
+            {"id": 2, "file_name": "f2.png", "width": 100, "height": 100},
+        ],
+        "categories": [{"id": 0, "name": "target"}],
+        "annotations": [
+            {
+                "id": 0,
+                "image_id": 1,
+                "category_id": 0,
+                "bbox": [10, 10, 5, 5],
+                "area": 25,
+                "iscrowd": 0,
+            },
+            {
+                "id": 1,
+                "image_id": 2,
+                "category_id": 0,
+                "bbox": [20, 20, 0, 0],
+                "area": 0,
+                "iscrowd": 0,
+            },
+        ],
+    }
+    rows = [{"image_id": 1, "category_id": 0, "bbox": [10, 10, 5, 5], "score": 0.9}]
+    gt_path, pred_path = tmp_path / "gt.json", tmp_path / "predictions.json"
+    gt_path.write_text(json.dumps(coco), encoding="utf-8")
+    pred_path.write_text(json.dumps(rows), encoding="utf-8")
+
+    manifest = {
+        "status": "complete",
+        "predictions_sha256": sha256(pred_path),
+        "annotations": {"sha256": sha256(gt_path)},
+        "detections": len(rows),
+        "image_ids": [1, 2],
+        "prediction_counts": {"1": len(rows)},  # image 2 with 0 detections is omitted
+        # predict_settings is omitted
+    }
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+    out_dir = tmp_path / "out"
+    result = analyze_failures(gt_path, {"model": pred_path}, out_dir)
+    assert result["models"]["model"]["verified_manifest"] is True
+    assert result["models"]["model"]["export_settings"] is None
+
+    # Check markdown table formatting in report.md
+    report_text = (out_dir / "report.md").read_text(encoding="utf-8")
+    lines = report_text.splitlines()
+    for i, line in enumerate(lines):
+        if line.startswith("| :---"):
+            header_cols = len([c for c in lines[i - 1].split("|")[1:-1]])
+            sep_cols = len([c for c in line.split("|")[1:-1]])
+            assert header_cols == sep_cols, (
+                f"Mismatch in table at line {i}: header {header_cols} != sep {sep_cols}"
+            )

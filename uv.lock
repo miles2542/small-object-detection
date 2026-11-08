@@ -42,6 +42,15 @@ wheels = [
 ]
 
 [[package]]
+name = "appdirs"
+version = "1.4.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/d7/d8/05696357e0311f5b5c316d7b95f46c669dd9c15aaeecbb48c7d0aeb88c40/appdirs-1.4.4.tar.gz", hash = "sha256:7d5d0167b2b1ba821647616af46a749d1c653740dd0d2415100fe26e27afdf41", size = 13470, upload-time = "2020-05-11T07:59:51.037Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3b/00/2344469e2084fb287c2e0b57b72910309874c3245463acd6cf5e3db69324/appdirs-1.4.4-py2.py3-none-any.whl", hash = "sha256:a841dacd6b99318a741b166adb07e19ee71a274450e68237b4650ca1055ab128", size = 9566, upload-time = "2020-05-11T07:59:49.499Z" },
+]
+
+[[package]]
 name = "attrs"
 version = "26.1.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3633,6 +3642,7 @@ dependencies = [
     { name = "scikit-learn", version = "1.7.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "scikit-learn", version = "1.9.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "seaborn" },
+    { name = "tidecv" },
     { name = "torch" },
     { name = "torchvision" },
     { name = "typer" },
@@ -3658,6 +3668,7 @@ requires-dist = [
     { name = "sahi", specifier = ">=0.11.18" },
     { name = "scikit-learn", specifier = ">=1.4.0" },
     { name = "seaborn", specifier = ">=0.13.2" },
+    { name = "tidecv", specifier = "==1.0.1" },
     { name = "torch", specifier = ">=2.1.0" },
     { name = "torchvision", specifier = ">=0.16.0" },
     { name = "typer", specifier = ">=0.12.0" },
@@ -3753,6 +3764,30 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/00/dc/6c58154c1c65f758ea979e7139cb76993a9cfc662d14e9be3c4a667cfb77/threadpoolctl-3.7.0.tar.gz", hash = "sha256:61348cfb77d53b9242e0017029244b559b810c142ced65b4e21eeca1843959a7", size = 31961, upload-time = "2026-09-15T15:46:20.263Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/43/3f/f88a53f60a472b46f4023f56d204dd7de33d34c5d2acbfa0d70a674e639e/threadpoolctl-3.7.0-py3-none-any.whl", hash = "sha256:cd8b60b5641b45c67bbf73c64c843235fc2d8a480c87389f52f5dbee893b86be", size = 26362, upload-time = "2026-09-15T15:46:19.168Z" },
+]
+
+[[package]]
+name = "tidecv"
+version = "1.0.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "appdirs" },
+    { name = "matplotlib", version = "3.10.9", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "matplotlib", version = "3.11.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "numpy", version = "1.26.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' and sys_platform == 'darwin'" },
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' and sys_platform != 'darwin'" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
+    { name = "numpy", version = "2.5.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "opencv-python", version = "4.11.0.86", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' and sys_platform == 'darwin'" },
+    { name = "opencv-python", version = "5.0.0.93", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11' or sys_platform != 'darwin'" },
+    { name = "pandas", version = "2.3.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "pandas", version = "3.1.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "pycocotools" },
+    { name = "seaborn" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/67/a7/4357183e1022efd5033ebbf9d1dbf47c0a0dd9236ff2098f55abca5a2da6/tidecv-1.0.1.tar.gz", hash = "sha256:ae6a8714b78483e74a8995659e3a2d656810ab29402d488f11062c8a7a46696e", size = 23424, upload-time = "2020-08-31T19:54:47.219Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/aa/4e/750bc933bb8c0ebe1d6f07b44c1937c46a50d26f9ef00960f1d81f219971/tidecv-1.0.1-py3-none-any.whl", hash = "sha256:42245fa065f87941ebb4016bc6000a89b158976a5c0f2132067d7731e0a1d307", size = 25808, upload-time = "2020-08-31T19:54:45.631Z" },
 ]
 
 [[package]]

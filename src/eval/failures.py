@@ -8,8 +8,11 @@ import os
 import tempfile
 from collections import Counter
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
-os.environ.setdefault("MPLCONFIGDIR", str(Path(tempfile.gettempdir()) / "sod-matplotlib"))
+if TYPE_CHECKING:
+    from tidecv.data import Data
+    from tidecv.quantify import TIDERun
 
 from src.eval.audit import sha256
 from src.eval.coco_eval import evaluate_coco, validate_inputs
@@ -30,8 +33,10 @@ def exclusive_size_bin(area: float) -> str:
     return "medium"
 
 
-def _tide_data(coco: dict, rows: list[dict], max_dets: int):
-    # Import after the caller selects a writable Matplotlib cache directory.
+def _tide_data(
+    coco: dict[str, Any], rows: list[dict[str, Any]], max_dets: int
+) -> tuple[Data, Data]:
+    os.environ.setdefault("MPLCONFIGDIR", str(Path(tempfile.gettempdir()) / "sod-matplotlib"))
     from tidecv.data import Data
 
     gt = Data("ground_truth", max_dets=max_dets)
@@ -55,7 +60,7 @@ def _tide_data(coco: dict, rows: list[dict], max_dets: int):
     return gt, pred
 
 
-def _error_events(run, gt_data) -> list[dict]:
+def _error_events(run: TIDERun, gt_data: Data) -> list[dict[str, Any]]:
     from tidecv.errors.main_errors import (
         BackgroundError,
         BoxError,
@@ -105,12 +110,14 @@ def _error_events(run, gt_data) -> list[dict]:
             dy = py + ph / 2 - ty - th / 2
             item["center_shift_px"] = [dx, dy]
             item["center_distance_px"] = math.hypot(dx, dy)
-            item["center_distance_over_sqrt_gt_area"] = math.hypot(dx, dy) / math.sqrt(area)
+            item["center_distance_over_sqrt_gt_area"] = (
+                math.hypot(dx, dy) / math.sqrt(area) if area > 0 else 0.0
+            )
         events.append(item)
     return events
 
 
-def _check_manifest(path: Path, gt_hash: str, rows: list[dict]) -> dict | None:
+def _check_manifest(path: Path, gt_hash: str, rows: list[dict[str, Any]]) -> dict[str, Any] | None:
     manifest_path = path.with_name("manifest.json")
     if not manifest_path.exists():
         return None
@@ -128,12 +135,15 @@ def _check_manifest(path: Path, gt_hash: str, rows: list[dict]) -> dict | None:
     counts = Counter(row["image_id"] for row in rows)
     if not set(counts) <= set(ids):
         raise ValueError(f"Predictions include images outside export manifest beside {path}")
-    if any(counts[image_id] != manifest["prediction_counts"][str(image_id)] for image_id in ids):
+    if any(
+        counts[image_id] != manifest.get("prediction_counts", {}).get(str(image_id), 0)
+        for image_id in ids
+    ):
         raise ValueError(f"Prediction counts disagree with export manifest beside {path}")
     return manifest
 
 
-def _render_charts(report: dict, output_dir: Path) -> None:
+def _render_charts(report: dict[str, Any], output_dir: Path) -> None:
     import matplotlib
 
     matplotlib.use("Agg")
@@ -194,8 +204,11 @@ def _render_charts(report: dict, output_dir: Path) -> None:
 
 
 def _render_gallery(
-    events_by_model: dict[str, list[dict]], coco: dict, image_root: Path, output_dir: Path
-) -> list[dict]:
+    events_by_model: dict[str, list[dict[str, Any]]],
+    coco: dict[str, Any],
+    image_root: Path,
+    output_dir: Path,
+) -> list[dict[str, Any]]:
     import matplotlib
 
     matplotlib.use("Agg")
@@ -269,7 +282,7 @@ def _render_gallery(
     return selected
 
 
-def _markdown(report: dict) -> str:
+def _markdown(report: dict[str, Any]) -> str:
     lines = [
         "# TIDE failure analysis",
         "",
@@ -321,7 +334,7 @@ def _markdown(report: dict) -> str:
             ),
             "",
             "| Event size | GT support | Cls | Loc | Both | Dupe | Bkg | Miss | Loc center shift median (px) |",
-            "| :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+            "| :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
         ]
         for size in SIZE_BINS:
             row = data["size_bins"][size]
@@ -413,8 +426,9 @@ def analyze_failures(
     output_dir: Path,
     *,
     image_root: Path | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """Run official TIDE error attribution on comparable saved COCO outputs."""
+    os.environ.setdefault("MPLCONFIGDIR", str(Path(tempfile.gettempdir()) / "sod-matplotlib"))
     ground_truth, output_dir = Path(ground_truth), Path(output_dir)
     if not models or any(not name or not name.strip() for name in models):
         raise ValueError("Provide at least one labeled prediction JSON")
@@ -451,7 +465,7 @@ def analyze_failures(
         validate_inputs(coco_raw, rows, None)
         manifest = _check_manifest(path, gt_hash, rows)
         image_sets.append(None if manifest is None else set(manifest["image_ids"]))
-        settings.append(None if manifest is None else manifest["predict_settings"])
+        settings.append(None if manifest is None else manifest.get("predict_settings"))
         model_coco = prepare_ground_truth(coco_raw, manifest["image_ids"] if manifest else None)
         official, _ = evaluate_coco(
             coco_raw, rows, image_ids=manifest["image_ids"] if manifest else None
@@ -505,7 +519,7 @@ def analyze_failures(
             "predictions_sha256": sha256(path),
             "verified_manifest": manifest is not None,
             "purpose": None if manifest is None else manifest.get("purpose"),
-            "export_settings": None if manifest is None else manifest["predict_settings"],
+            "export_settings": None if manifest is None else manifest.get("predict_settings"),
             "prediction_count": len(rows),
             "image_count": len(model_coco["images"]),
             "tide_ap50_percent": float(run.ap),
