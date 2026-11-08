@@ -2,6 +2,18 @@
 
 from __future__ import annotations
 
+from src.postprocess.tta import (
+    TestTimeAugmentor,
+    invert_boxes,
+    transform_boxes,
+    transform_image,
+)
 from src.postprocess.wbf import weighted_boxes_fusion
 
-__all__ = ["weighted_boxes_fusion"]
+__all__ = [
+    "TestTimeAugmentor",
+    "invert_boxes",
+    "transform_boxes",
+    "transform_image",
+    "weighted_boxes_fusion",
+]
