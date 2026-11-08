@@ -118,6 +118,9 @@ sod eval compare `
   --image-root data/ai-tod-v2/splits/full/images/val
 ```
 
+For a six-mode TIDE breakdown, size-group error composition, and an optional
+qualitative gallery, see [Detection failure analysis](failure_analysis.md).
+
 ### CLI Options Reference
 
 | Flag | Type | Description |

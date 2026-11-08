@@ -140,14 +140,14 @@ class EvaluationCliTests(unittest.TestCase):
             )
         )
         _, resolved, ids = resolve_inputs(config, "val", self.gt, None)
-        self.assertEqual(resolved, images)
+        self.assertEqual(resolved, images.resolve())
         self.assertEqual(ids, [0])
         canonical = self.root / "annotations"
         canonical.mkdir()
         canonical = canonical / "aitod_val.json"
         canonical.write_text(json.dumps(self.data))
         discovered, _, _ = resolve_inputs(config, "val", None, None)
-        self.assertEqual(discovered, canonical)
+        self.assertEqual(discovered, canonical.resolve())
         weights = self.root / "fixture.pt"
         weights.write_bytes(b"not loaded; export mocked at model boundary")
         early = self.invoke(

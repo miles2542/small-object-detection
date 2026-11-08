@@ -248,6 +248,37 @@ def eval_compare(
     )
 
 
+@eval_app.command("failures")
+def eval_failures(
+    ground_truth: Path = typer.Option(..., "--ground-truth", exists=True, dir_okay=False),
+    models: list[str] = typer.Option(
+        ..., "--model", "-m", help="Repeat LABEL=COCO_PREDICTIONS_JSON for each model"
+    ),
+    output_dir: Path = typer.Option(Path("runs/eval/failures"), "--output-dir", "-o"),
+    image_root: Path | None = typer.Option(None, "--image-root", exists=True, file_okay=False),
+) -> None:
+    """Analyze six TIDE failure modes and their distributions across target sizes."""
+    from src.eval.failures import analyze_failures
+
+    pairs = [item.split("=", 1) for item in models]
+    if any(len(pair) != 2 or not pair[0] or not pair[1] for pair in pairs):
+        ui.print_error("Each --model must be LABEL=PREDICTIONS_JSON")
+        raise typer.Exit(code=1)
+    if len({pair[0] for pair in pairs}) != len(pairs):
+        ui.print_error("Model labels must be distinct")
+        raise typer.Exit(code=1)
+    try:
+        result = analyze_failures(
+            ground_truth, {name: Path(path) for name, path in pairs}, output_dir,
+            image_root=image_root,
+        )
+    except (ValueError, TypeError, KeyError, OSError, ImportError) as error:
+        ui.print_error(str(error))
+        raise typer.Exit(code=1) from error
+    ui.print_header("TIDE failure analysis", f"{len(result['models'])} models | {output_dir}")
+    ui.print_success(f"Report and charts saved to {output_dir}")
+
+
 @infer_app.command("sahi")
 def infer_sahi(
     weights: Path = typer.Option(
