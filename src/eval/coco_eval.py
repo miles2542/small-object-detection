@@ -162,6 +162,110 @@ def operating_counts(evaluator: COCOeval, area_index: int, threshold: float) -> 
     }
 
 
+def _fast_evaluate(evaluator: COCOeval) -> None:
+    """Exact, accelerated drop-in replacement for COCOeval.evaluate() avoiding unmatchable iteration overhead."""
+    p = evaluator.params
+    if p.useSegm is not None:
+        p.iouType = "segm" if p.useSegm == 1 else "bbox"
+    p.imgIds = list(np.unique(p.imgIds))
+    if p.useCats:
+        p.catIds = list(np.unique(p.catIds))
+    p.maxDets = sorted(p.maxDets)
+    evaluator.params = p
+
+    evaluator._prepare()
+    catIds = p.catIds if p.useCats else [-1]
+
+    if p.iouType in ("segm", "bbox"):
+        computeIoU = evaluator.computeIoU
+    elif p.iouType == "keypoints":
+        computeIoU = evaluator.computeOks
+    else:
+        raise ValueError(f"Unknown iouType: {p.iouType}")
+
+    evaluator.ious = {
+        (imgId, catId): computeIoU(imgId, catId)
+        for imgId in p.imgIds
+        for catId in catIds
+    }
+
+    maxDet = p.maxDets[-1]
+
+    def _eval_img(imgId: int, catId: int, aRng: list[float] | tuple[float, float]) -> dict | None:
+        gt = list(evaluator._gts.get((imgId, catId), []))
+        dt = list(evaluator._dts.get((imgId, catId), []))
+        if len(gt) == 0 and len(dt) == 0:
+            return None
+
+        for g in gt:
+            g["_ignore"] = 1 if (g.get("ignore", 0) or (g["area"] < aRng[0] or g["area"] > aRng[1])) else 0
+
+        gtind = np.argsort([g["_ignore"] for g in gt], kind="mergesort")
+        gt = [gt[i] for i in gtind]
+        dtind = np.argsort([-d["score"] for d in dt], kind="mergesort")
+        dt = [dt[i] for i in dtind[:maxDet]]
+        iscrowd = [int(o.get("iscrowd", 0)) for o in gt]
+
+        ious_cur = evaluator.ious.get((imgId, catId))
+        iou_sub = ious_cur[:, gtind] if ious_cur is not None and len(ious_cur) > 0 else ious_cur
+
+        T = len(p.iouThrs)
+        G = len(gt)
+        D = len(dt)
+        gtm = np.zeros((T, G))
+        dtm = np.zeros((T, D))
+        gtIg = np.array([g["_ignore"] for g in gt])
+        dtIg = np.zeros((T, D))
+
+        if iou_sub is not None and len(iou_sub) > 0 and G > 0 and D > 0:
+            max_iou_per_d = np.max(iou_sub, axis=1)
+            for tind, t in enumerate(p.iouThrs):
+                iou_thresh = min(t, 1.0 - 1e-10)
+                for dind in range(D):
+                    if max_iou_per_d[dind] < iou_thresh:
+                        continue
+                    iou = iou_thresh
+                    m = -1
+                    for gind in range(G):
+                        if gtm[tind, gind] > 0 and not iscrowd[gind]:
+                            continue
+                        if m > -1 and gtIg[m] == 0 and gtIg[gind] == 1:
+                            break
+                        if iou_sub[dind, gind] < iou:
+                            continue
+                        iou = iou_sub[dind, gind]
+                        m = gind
+                    if m == -1:
+                        continue
+                    dtIg[tind, dind] = gtIg[m]
+                    dtm[tind, dind] = gt[m]["id"]
+                    gtm[tind, m] = dt[dind]["id"]
+
+        a = np.array([d["area"] < aRng[0] or d["area"] > aRng[1] for d in dt]).reshape((1, len(dt)))
+        dtIg = np.logical_or(dtIg, np.logical_and(dtm == 0, np.repeat(a, T, 0)))
+        return {
+            "image_id": imgId,
+            "category_id": catId,
+            "aRng": aRng,
+            "maxDet": maxDet,
+            "dtIds": [d["id"] for d in dt],
+            "gtIds": [g["id"] for g in gt],
+            "dtMatches": dtm,
+            "gtMatches": gtm,
+            "dtScores": [d["score"] for d in dt],
+            "gtIgnore": gtIg,
+            "dtIgnore": dtIg,
+        }
+
+    evaluator.evalImgs = [
+        _eval_img(imgId, catId, areaRng)
+        for catId in catIds
+        for areaRng in p.areaRng
+        for imgId in p.imgIds
+    ]
+    evaluator._paramsEval = deepcopy(evaluator.params)
+
+
 def evaluate_coco(
     coco: dict,
     predictions: list,
@@ -209,7 +313,7 @@ def evaluate_coco(
             np.array(protocol["iou_thresholds"]),
             np.array(protocol["recall_thresholds"]),
         )
-        evaluator.evaluate()
+        _fast_evaluate(evaluator)
         evaluator.accumulate()
     precision, recall = evaluator.eval["precision"], evaluator.eval["recall"]
     i50, i75 = [int(np.flatnonzero(np.isclose(p.iouThrs, value))[0]) for value in [0.5, 0.75]]

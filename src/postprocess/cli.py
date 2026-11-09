@@ -6,10 +6,36 @@ import json
 from pathlib import Path
 
 import typer
+from typer.core import TyperCommand
 
 from src.postprocess.ensemble import ensemble_predictions
 from src.postprocess.tta import TestTimeAugmentor
 from src.utils import ui
+
+
+class MultiValueOptionCommand(TyperCommand):
+    """Command that allows multi-value options such as --weights 1.0 1.0."""
+
+    def parse_args(self, ctx, args):
+        new_args = []
+        i = 0
+        while i < len(args):
+            arg = args[i]
+            new_args.append(arg)
+            i += 1
+            if arg in ("--weights", "-w", "--scales"):
+                if i < len(args) and not args[i].startswith("-"):
+                    new_args.append(args[i])
+                    i += 1
+                while i < len(args) and not args[i].startswith("-"):
+                    try:
+                        float(args[i])
+                        new_args.extend([arg, args[i]])
+                        i += 1
+                    except ValueError:
+                        break
+        return super().parse_args(ctx, new_args)
+
 
 postprocess_app = typer.Typer(
     help="Post-processing, Test-Time Augmentation (TTA), and Weighted Boxes Fusion.",
@@ -17,7 +43,7 @@ postprocess_app = typer.Typer(
 )
 
 
-@postprocess_app.command("fuse")
+@postprocess_app.command("fuse", cls=MultiValueOptionCommand)
 def postprocess_fuse(
     input_files: list[Path] = typer.Option(
         ...,
@@ -223,11 +249,12 @@ def postprocess_bench(
         dir_okay=False,
         help="Path to predictions COCO JSON",
     ),
-    output_dir: Path | None = typer.Option(
+    output_metrics: Path | None = typer.Option(
         None,
+        "--output-metrics",
         "--output-dir",
         "-o",
-        help="Optional directory to save evaluation metrics",
+        help="Optional destination path for metrics JSON file or output directory",
     ),
     confidence: float | None = typer.Option(
         None,
@@ -257,8 +284,9 @@ def postprocess_bench(
     ]
 
     for key, label in bin_labels:
-        if key in bins:
-            b_data = bins[key]
+        b_key = key if key in bins else ("verytiny" if key == "very_tiny" else key)
+        if b_key in bins:
+            b_data = bins[b_key]
             ap_val = f"{b_data['AP']:.4f}" if b_data.get("AP") is not None else "N/A"
             ap50_val = f"{b_data['AP50']:.4f}" if b_data.get("AP50") is not None else "N/A"
             ar_val = f"{b_data['AR']:.4f}" if b_data.get("AR") is not None else "N/A"
@@ -276,9 +304,15 @@ def postprocess_bench(
         column_alignments=["left", "right", "right", "right", "right"],
     )
 
-    if output_dir is not None:
-        output_dir.mkdir(parents=True, exist_ok=True)
-        (output_dir / "metrics.json").write_text(
+    if output_metrics is not None:
+        if output_metrics.suffix.lower() == ".json":
+            save_path = output_metrics
+            save_path.parent.mkdir(parents=True, exist_ok=True)
+        else:
+            save_path = output_metrics / "metrics.json"
+            output_metrics.mkdir(parents=True, exist_ok=True)
+
+        save_path.write_text(
             json.dumps(metrics, indent=2, allow_nan=False), encoding="utf-8"
         )
-        ui.print_success(f"Saved benchmark metrics to {output_dir / 'metrics.json'}")
+        ui.print_success(f"Saved benchmark metrics to {save_path}")
