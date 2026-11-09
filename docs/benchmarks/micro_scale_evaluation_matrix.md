@@ -22,7 +22,7 @@ Operating protocol:
 
 ---
 
-## 2. Milestone 2: Micro-Scale Benchmark Matrix (Full 2,804 Validation Images)
+## 2. Micro-Scale Benchmark Matrix (Full 2,804 Validation Images)
 
 | Model Architecture | Head & Loss Specialization | Inference Post-Processing | Eval Latency (s) | $AP_{\text{all}}$ | $AP_{50}$ | $\mathbf{AP_{vt}}$ (2–8px) | $\mathbf{AP_{50,vt}}$ | $\mathbf{AP_t}$ (8–16px) | $\mathbf{AP_{50,t}}$ | $AP_s$ (16–32px) | $AP_m$ (32–64px) |
 | :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
@@ -33,7 +33,7 @@ Operating protocol:
 
 ---
 
-## 3. Milestone 3: Full Validation SAHI Sliced Inference Benchmark (2,804 Images)
+## 3. Full Validation SAHI Sliced Inference Benchmark (2,804 Images)
 
 | Model Architecture | Slicing Resolution | Overlap Ratio | Images Evaluated | Total Detections | Mean Latency per Image | Total Wall Time | Throughput (FPS) |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
@@ -44,7 +44,7 @@ Operating protocol:
 
 ---
 
-## 4. Milestone 5: Multi-Model Weighted Boxes Fusion (WBF) Benchmark (2,804 Images)
+## 4. Multi-Model Weighted Boxes Fusion (WBF) Benchmark (2,804 Images)
 
 Evaluated under the official 101-point COCO integration protocol on AI-TOD-v2 validation set ($conf = 0.001$, $IoU_{\text{cluster}} = 0.50$):
 
@@ -60,7 +60,7 @@ Evaluated under the official 101-point COCO integration protocol on AI-TOD-v2 va
 
 ---
 
-## 5. Milestone 5: TIDE Detection Failure Analysis (2,804 Images, 75,082 Instances)
+## 5. TIDE Detection Failure Analysis (2,804 Images, 75,082 Instances)
 
 Oracle $\Delta AP_{50}$ attribution across the six mutually exclusive error modes:
 

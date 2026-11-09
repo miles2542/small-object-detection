@@ -1,6 +1,6 @@
-# Milestone 3 Implementation Report: Inference Strategies & SAHI
+# Implementation Report: Inference Strategies & SAHI
 
-This document provides a comprehensive technical breakdown of all architectural designs, algorithms, code modifications, and contract reconciliations implemented for **Milestone 3 (Inference Strategies: High-Resolution & Slicing-Aided Hyper Inference - SAHI)**.
+This document provides a comprehensive technical breakdown of all architectural designs, algorithms, code modifications, and contract reconciliations implemented for **Inference Strategies: High-Resolution & Slicing-Aided Hyper Inference (SAHI)**.
 
 ---
 
@@ -11,8 +11,8 @@ In the AI-TOD-v2 aerial benchmark (14,018 images at $800 \times 800$), objects e
 - **Target distribution:** **86.54%** of all instances measure $\le 16$ px.
 - **Architectural bottleneck:** Standard Feature Pyramid Network (FPN) strides ($P_3=8, P_4=16, P_5=32$) cause severe sub-pixel spatial collapse. At stride 16, a median target covers less than $0.74 \times 0.74$ grid cells.
 
-### Milestone 3 Goal
-To address this degradation **without retraining the backbone**, Milestone 3 introduces and benchmarks inference-time spatial recovery mechanisms:
+### Primary Objective
+To address this degradation **without retraining the backbone**, this module introduces and benchmarks inference-time spatial recovery mechanisms:
 1. **Patch Slicing (SAHI):** Cropping images into overlapping sub-windows ($512 \times 512$ with $0.20$ overlap), inferring on each crop at full feature resolution, and re-stitching detections into global coordinates.
 2. **Standard High-Resolution Inference:** Benchmarking full-frame input scaling ($800 \times 800$, $1280 \times 1280$, $1600 \times 1600$).
 3. **Trade-off Analysis:** Measuring micro-target precision recovery ($AP_{vt}, AP_t$) versus latency and memory overhead.
@@ -113,7 +113,7 @@ All commands integrate with `src.utils.ui` for formatting, displaying tabular su
 
 ### Task 4: Evaluation Integration & Contract Reconciliation
 
-When predictions are evaluated via `sod eval run --predictions ...` and compared via `sod eval compare`, the evaluation harness (from Milestone 2) enforces strict data contracts:
+When predictions are evaluated via `sod eval run --predictions ...` and compared via `sod eval compare`, the evaluation harness enforces strict data contracts:
 
 1. **Prediction Schema Invariant:**
    A top-level JSON array of detection dictionaries:

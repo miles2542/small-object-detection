@@ -85,7 +85,7 @@
 
 ---
 
-## 4. Architectural Implications & Team Design Decisions
+## 4. Architectural Implications & Design Decisions
 
 ### Feature Map Stride Collapse at P2, P3, P4, and P5
 Standard YOLO object detection backbones downsample input imagery across successive feature pyramid network (FPN) stages:

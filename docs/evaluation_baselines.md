@@ -4,7 +4,7 @@
 
 **Official benchmark:** **Genuine 100-epoch trained-model artifacts verified and benchmarked.** See detailed [Baseline Training & Inference Benchmark Report](benchmarks/baseline_training_and_inference.md).
 
-**Updated:** 2026-11-05 (Asia/Saigon).
+**Updated:** 2026-11-05.
 
 ## Official baseline gate
 
