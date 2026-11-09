@@ -1,6 +1,5 @@
 # Empirical Training Throughput & Resource Utilization Profiling (CPU vs. Kaggle Dual T4 GPU)
 
-**Task Reference:** Task 1 \
 **Dataset Baseline:** AI-TOD-v2 mini split ($800 \times 800$, tiny objects $\le 16 \times 16$ px) \
 **Model:** YOLOv8s (`yolov8s.pt`, 11.14M params, 28.7 GFLOPs) \
 **Local CPU Host:** 12th Gen Intel Core i5-12600K (10 cores, 16 threads, 32GB RAM), Windows 11, PyTorch 2.14.1+cpu \

@@ -124,6 +124,6 @@
    - SAHI tiling increases inference latency by $\sim 3.5\times$ (4 slices on $800 \times 800$, 9 slices on $1280 \times 1280$), reducing frame rates to $\sim 0.8$ FPS.
 4. **Execution Infrastructure (Local CPU vs. Cloud GPU):**
    - Local workstations are dedicated to data ingestion, EDA, format conversions, unit tests, and lightweight CPU inference.
-   - Resource-intensive model training (full 100-epoch runs for YOLOv8s and YOLO26s baselines and the factorial ablation matrix) is routed to cloud environments with dual NVIDIA T4 GPUs (Kaggle/Colab) and teammate CUDA hardware (RTX 3060). Remote training sweeps will be orchestrated via programmatic Kaggle CLI workflows (`kaggle kernels push`/`status`/`output`).
+   - Resource-intensive model training (full 100-epoch runs for YOLOv8s and YOLO26s baselines and the factorial ablation matrix) is routed to cloud environments with dual NVIDIA T4 GPUs (Kaggle/Colab) and local CUDA hardware (RTX 3060). Remote training sweeps will be orchestrated via programmatic Kaggle CLI workflows (`kaggle kernels push`/`status`/`output`).
 5. **Factorial Ablation Matrix Integration:**
    - The runtime profiling confirms that testing higher input resolutions ($1280 \times 1280$) and integrating high-resolution P2 stride-4 heads will introduce compute overheads that are best absorbed by cloud GPU infrastructure rather than CPU local machines.

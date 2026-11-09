@@ -1,5 +1,5 @@
 {
-  "id": "miles2542/ai-tod-baseline-continuation-benchmarking",
+  "id": "anonymous/ai-tod-baseline-continuation-benchmarking",
   "title": "AI-TOD Baseline Continuation & Benchmarking",
   "code_file": "runner.py",
   "language": "python",
@@ -10,7 +10,7 @@
   "enable_internet": "true",
   "dataset_sources": [
     "ngtininh/ai-tod-v2",
-    "miles2542/ai-tod-baseline-checkpoints"
+    "anonymous/ai-tod-baseline-checkpoints"
   ],
   "competition_sources": [],
   "kernel_sources": [],

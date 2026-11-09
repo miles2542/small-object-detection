@@ -686,7 +686,7 @@ def kaggle_scaffold(
         help="Directory to store Kaggle kernel configuration and runner script",
     ),
     kernel_id: str = typer.Option(
-        "miles2542/aitod-baseline-training",
+        "anonymous/aitod-baseline-training",
         "--kernel-id",
         help="Kaggle kernel identifier (username/slug)",
     ),
@@ -736,7 +736,7 @@ def kaggle_push(
 @kaggle_app.command("status")
 def kaggle_status(
     kernel_id: str = typer.Option(
-        "miles2542/aitod-baseline-training",
+        "anonymous/aitod-baseline-training",
         "--kernel-id",
         help="Kaggle kernel identifier",
     ),
@@ -750,7 +750,7 @@ def kaggle_status(
 @kaggle_app.command("output")
 def kaggle_output(
     kernel_id: str = typer.Option(
-        "miles2542/aitod-baseline-training",
+        "anonymous/aitod-baseline-training",
         "--kernel-id",
         help="Kaggle kernel identifier",
     ),

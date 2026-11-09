@@ -3,7 +3,7 @@
 Orchestrates:
 1. Environment verification & GPU diagnostics (Dual NVIDIA T4 GPUs).
 2. AI-TOD-v2 data preparation, individual image linking, and label sanitization.
-3. Checkpoint restoration from kernel source `miles2542/ai-tod-baseline-training`:
+3. Checkpoint restoration from baseline training checkpoints:
    - YOLOv8s 100-epoch converged weights (mAP50: 0.5878, mAP50-95: 0.2656)
    - YOLO26s checkpoint at epoch 43 (mAP50: 0.5505, mAP50-95: 0.2483)
 4. Stage 3 Continuation: Resume YOLO26s training from epoch 43 through epoch 100 (~3.8h on Dual-T4).
@@ -219,7 +219,7 @@ print(f"Generated dataset YAML at {dataset_yaml}")
 
 # 3. Locate & Restore Checkpoints from Dataset / Kernel Input
 print("\n" + "=" * 80)
-print("[Step 3/5] Restoring Checkpoints from 'miles2542/ai-tod-baseline-checkpoints'")
+print("[Step 3/5] Restoring Checkpoints from attached input datasets")
 print("=" * 80)
 
 # Search for YOLOv8s best.pt and YOLO26s last.pt across /kaggle/input

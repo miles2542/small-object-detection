@@ -13,7 +13,7 @@ from src.utils import ui
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_KERNEL_ID = "miles2542/aitod-baseline-training"
+DEFAULT_KERNEL_ID = "anonymous/aitod-baseline-training"
 DEFAULT_KERNEL_TITLE = "AI-TOD Baseline Training"
 
 
