@@ -44,7 +44,36 @@ Operating protocol:
 
 ---
 
-## 4. Empirical Findings & Architectural Insights
+## 4. Milestone 5: Multi-Model Weighted Boxes Fusion (WBF) Benchmark (2,804 Images)
+
+Evaluated under the official 101-point COCO integration protocol on AI-TOD-v2 validation set ($conf = 0.001$, $IoU_{\text{cluster}} = 0.50$):
+
+| Model / Ensemble Configuration | Weights | $AP_{\text{all}}$ | $AP_{50}$ | $AP_{75}$ | $\mathbf{AP_{vt}}$ (2–8px) | $\mathbf{AP_t}$ (8–16px) | $AP_s$ (16–32px) | $AP_m$ (32–64px) |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **YOLOv8s Baseline** | — | 0.2689 | 0.5905 | 0.1993 | 0.0874 | 0.2507 | 0.3514 | **0.4644** |
+| **YOLO26s Baseline** | — | 0.2713 | 0.5900 | 0.1989 | **0.1437** | 0.2558 | 0.3428 | 0.4499 |
+| **YOLOv8s-P2 + NWD** | — | 0.2675 | 0.5892 | 0.1898 | 0.1117 | 0.2537 | 0.3379 | 0.4445 |
+| **YOLO26s-P2 + NWD** | — | 0.2667 | 0.5769 | 0.2036 | 0.1355 | 0.2554 | 0.3333 | 0.4533 |
+| *WBF: Baselines Pair* | 1.0, 1.0 | 0.2614 | 0.5699 | 0.1954 | 0.0962 | 0.2438 | 0.3486 | 0.4534 |
+| *WBF: P2+NWD Pair* | 1.0, 1.0 | 0.2601 | 0.5705 | 0.1996 | 0.1117 | 0.2446 | 0.3430 | 0.4501 |
+| **WBF: 4-Model Fleet Ensemble** | 1.0, 1.0, 1.2, 1.2 | **0.2753** | **0.5932** | **0.2185** | 0.1255 | **0.2599** | **0.3585** | 0.4594 |
+
+---
+
+## 5. Milestone 5: TIDE Detection Failure Analysis (2,804 Images, 75,082 Instances)
+
+Oracle $\Delta AP_{50}$ attribution across the six mutually exclusive error modes:
+
+| Model Architecture | TIDE $AP_{50}$ (%) | $\mathbf{\Delta AP_{\text{Loc}}}$ | $\Delta AP_{\text{Cls}}$ | $\Delta AP_{\text{Both}}$ | $\Delta AP_{\text{Dupe}}$ | $\Delta AP_{\text{Bkg}}$ | $\Delta AP_{\text{Miss}}$ |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **YOLOv8s Baseline** | 59.05% | +9.91 | +1.16 | +0.02 | +0.77 | +7.38 | +3.00 |
+| **YOLO26s Baseline** | 59.00% | +8.17 | +0.84 | +0.01 | +0.76 | +8.71 | +2.91 |
+| **YOLOv8s-P2 + NWD**   | 58.92% | +8.42 (-1.49) | +1.01 | +0.01 | +0.75 | +8.23 | +3.02 |
+| **YOLO26s-P2 + NWD**   | 57.70% | **+6.45 (-1.72)** | +0.84 | +0.02 | +1.53 | +6.55 | +3.74 |
+
+---
+
+## 6. Empirical Findings & Architectural Insights
 
 ### 4.1 Sub-8-Pixel Recovery Dynamics ($AP_{vt}$)
 - **YOLO26s Architectural Superiority on Micro Targets:**
@@ -62,7 +91,7 @@ Operating protocol:
 
 ---
 
-## 5. Artifact Ledger
+## 7. Artifact Ledger
 
 All raw prediction files, JSON matrices, and precision-recall curves are archived locally in `evaluation_results_consolidated/output/`:
 - `micro_scale_benchmark_matrix.json`: Full nested dictionary of AP/AR metrics per model and category.
